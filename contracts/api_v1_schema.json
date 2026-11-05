@@ -1,0 +1,382 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://melodyx.app/schemas/api_v1_schema.json",
+  "title": "MELODYX API v1 Analysis Response Schema",
+  "description": "JSON Schema for the MELODYX analysis response object (v1.0).",
+  "definitions": {
+    "Estimation": {
+      "type": "object",
+      "description": "A measured or estimated value with confidence and provenance.",
+      "properties": {
+        "value": {
+          "description": "The estimated value (number, string, etc.)."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Confidence score between 0 and 1."
+        },
+        "source": {
+          "type": "string",
+          "description": "The tool or model that produced this estimation (e.g. 'librosa', 'basic_pitch', 'gemini')."
+        }
+      },
+      "required": ["value", "confidence", "source"],
+      "additionalProperties": false
+    },
+    "Note": {
+      "type": "object",
+      "description": "A single detected musical note.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^n_",
+          "description": "Unique note identifier with n_ prefix."
+        },
+        "pitch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 127,
+          "description": "MIDI pitch number (0-127)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable note name (e.g. 'C4', 'F#5')."
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "Start time in seconds from the beginning of the audio."
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "Duration in seconds."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Transcription confidence (0-1)."
+        },
+        "source": {
+          "type": "string",
+          "description": "The model that detected the note (e.g. 'basic_pitch')."
+        },
+        "estimated": {
+          "type": "boolean",
+          "description": "True if the note properties were estimated rather than directly measured."
+        },
+        "measure": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-indexed measure number the note belongs to."
+        },
+        "hand": {
+          "type": "string",
+          "enum": ["left", "right"],
+          "description": "Estimated hand assignment for piano transcription."
+        },
+        "beat_position": {
+          "type": "number",
+          "minimum": 1.0,
+          "description": "Beat position within the measure (1-indexed)."
+        }
+      },
+      "required": ["id", "pitch", "name", "start", "duration", "confidence", "source", "estimated"],
+      "additionalProperties": false
+    },
+    "Measure": {
+      "type": "object",
+      "description": "A detected musical measure (bar).",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-indexed measure number."
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "Start time of the measure in seconds."
+        },
+        "end": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "End time of the measure in seconds."
+        }
+      },
+      "required": ["index", "start", "end"],
+      "additionalProperties": false
+    },
+    "Chord": {
+      "type": "object",
+      "description": "A detected chord within a time range.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Chord label (e.g. 'C', 'Am', 'G7')."
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "Start time of the chord in seconds."
+        },
+        "end": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "End time of the chord in seconds."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Detection confidence (0-1)."
+        },
+        "source": {
+          "type": "string",
+          "description": "The tool or model that detected the chord."
+        }
+      },
+      "required": ["label", "start", "end", "confidence", "source"],
+      "additionalProperties": false
+    },
+    "AISummary": {
+      "type": ["object", "null"],
+      "description": "Structured AI-generated summary of the analysis.",
+      "properties": {
+        "measured": {
+          "type": "string",
+          "description": "Summary of what was objectively measured from the audio."
+        },
+        "hypotheses": {
+          "type": "string",
+          "description": "AI-generated interpretive hypotheses about the music."
+        },
+        "limits": {
+          "type": "string",
+          "description": "Known limitations and caveats about the analysis."
+        }
+      },
+      "required": ["measured", "hypotheses", "limits"],
+      "additionalProperties": false
+    },
+    "AIResponse": {
+      "type": "object",
+      "description": "AI interpretation section of the analysis response.",
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": "Whether the AI service was available for this analysis."
+        },
+        "model": {
+          "type": ["string", "null"],
+          "description": "The AI model used (e.g. 'gemini-2.0-flash'), or null if unavailable."
+        },
+        "summary": {
+          "$ref": "#/definitions/AISummary"
+        },
+        "error": {
+          "type": ["string", "null"],
+          "description": "Error message if AI was unavailable, null otherwise."
+        }
+      },
+      "required": ["available"],
+      "additionalProperties": false
+    },
+    "Warning": {
+      "type": "object",
+      "description": "A non-fatal warning about the analysis quality or limitations.",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Machine-readable warning code."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "error"],
+          "description": "Severity level of the warning."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable warning message."
+        }
+      },
+      "required": ["code", "severity", "message"],
+      "additionalProperties": false
+    },
+    "Error": {
+      "type": "object",
+      "description": "Error response object returned for failed requests.",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Machine-readable error code (e.g. 'invalid_request', 'unsupported_format')."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error description."
+        },
+        "request_id": {
+          "type": "string",
+          "description": "The X-Request-Id associated with this error."
+        }
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    },
+    "AnalysisResponse": {
+      "type": "object",
+      "description": "The complete analysis response returned by GET /api/analysis/{id}.",
+      "properties": {
+        "analysis_id": {
+          "type": "string",
+          "pattern": "^an_",
+          "description": "Unique analysis identifier with an_ prefix."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "processing", "completed", "failed"],
+          "description": "Current status of the analysis pipeline."
+        },
+        "stage": {
+          "type": "string",
+          "enum": ["upload", "preprocessing", "transcription", "music_analysis", "ai_interpretation"],
+          "description": "Current or last completed pipeline stage."
+        },
+        "progress": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Overall progress as a float from 0 to 1."
+        },
+        "audio": {
+          "type": "object",
+          "description": "Information about the uploaded audio file.",
+          "properties": {
+            "duration_seconds": {
+              "type": "number",
+              "minimum": 0.0,
+              "description": "Duration of the audio in seconds."
+            },
+            "sample_rate": {
+              "type": "integer",
+              "description": "Sample rate in Hz."
+            },
+            "channels": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Number of audio channels."
+            },
+            "original_filename": {
+              "type": "string",
+              "description": "Original filename as uploaded."
+            },
+            "file_size_bytes": {
+              "type": "integer",
+              "description": "File size in bytes."
+            }
+          },
+          "required": ["duration_seconds", "sample_rate", "channels"],
+          "additionalProperties": false
+        },
+        "music": {
+          "type": "object",
+          "description": "Musical analysis results.",
+          "properties": {
+            "tempo_bpm": {
+              "$ref": "#/definitions/Estimation"
+            },
+            "key": {
+              "$ref": "#/definitions/Estimation"
+            },
+            "time_signature": {
+              "$ref": "#/definitions/Estimation"
+            },
+            "beats": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0.0
+              },
+              "description": "Array of beat timestamps in seconds."
+            },
+            "measures": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Measure"
+              },
+              "description": "Array of detected measures."
+            },
+            "chords": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Chord"
+              },
+              "description": "Array of detected chords."
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Note"
+              },
+              "description": "Array of transcribed notes."
+            }
+          },
+          "required": ["tempo_bpm", "key", "time_signature", "beats", "measures", "notes"],
+          "additionalProperties": false
+        },
+        "ai": {
+          "$ref": "#/definitions/AIResponse"
+        },
+        "error": {
+          "$ref": "#/definitions/Error"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Warning"
+          },
+          "description": "Non-fatal warnings about the analysis."
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "max_file_mb": {
+              "type": "integer",
+              "description": "Maximum file size in megabytes."
+            },
+            "max_duration_s": {
+              "type": "integer",
+              "description": "Maximum audio duration in seconds."
+            }
+          },
+          "additionalProperties": false
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Schema version of the response (e.g. '1.0')."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp when the analysis was created."
+        },
+        "completed_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp when the analysis completed, or null."
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp when the analysis will be purged."
+        }
+      },
+      "required": ["analysis_id", "status", "schema_version"],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/definitions/AnalysisResponse"
+}

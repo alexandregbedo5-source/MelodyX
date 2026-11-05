@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "unsupported_format",
+    "message": "The uploaded file is not a supported audio format. Supported: WAV, MP3, FLAC, OGG, WebM, MP4, M4A.",
+    "request_id": "req_example_001"
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "analysis_id": "an_demo_piano_01",
+  "status": "completed",
+  "stage": "ai_interpretation",
+  "progress": 1.0,
+  "audio": {
+    "duration_seconds": 45.0,
+    "sample_rate": 22050,
+    "channels": 1,
+    "original_filename": "demo_piano.wav",
+    "file_size_bytes": 1984500
+  },
+  "music": {
+    "tempo_bpm": {
+      "value": 120.0,
+      "confidence": 0.89,
+      "source": "librosa"
+    },
+    "key": {
+      "value": "C major",
+      "confidence": 0.82,
+      "source": "librosa"
+    },
+    "time_signature": {
+      "value": "4/4",
+      "confidence": 0.95,
+      "source": "librosa"
+    },
+    "beats": [
+      0.0, 0.5, 1.0, 1.5,
+      2.0, 2.5, 3.0, 3.5,
+      4.0, 4.5, 5.0, 5.5,
+      6.0, 6.5, 7.0, 7.5
+    ],
+    "measures": [
+      {"index": 1, "start": 0.0, "end": 2.0},
+      {"index": 2, "start": 2.0, "end": 4.0},
+      {"index": 3, "start": 4.0, "end": 6.0},
+      {"index": 4, "start": 6.0, "end": 8.0}
+    ],
+    "chords": [
+      {"label": "C", "start": 0.0, "end": 2.0, "confidence": 0.91, "source": "librosa"},
+      {"label": "F", "start": 2.0, "end": 4.0, "confidence": 0.84, "source": "librosa"},
+      {"label": "G", "start": 4.0, "end": 6.0, "confidence": 0.87, "source": "librosa"},
+      {"label": "C", "start": 6.0, "end": 8.0, "confidence": 0.90, "source": "librosa"}
+    ],
+    "notes": [
+      {"id": "n_p001", "pitch": 60, "name": "C4",  "start": 0.0,  "duration": 0.45, "confidence": 0.92, "source": "basic_pitch", "estimated": false, "measure": 1, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p002", "pitch": 64, "name": "E4",  "start": 0.0,  "duration": 0.45, "confidence": 0.90, "source": "basic_pitch", "estimated": false, "measure": 1, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p003", "pitch": 67, "name": "G4",  "start": 0.0,  "duration": 0.45, "confidence": 0.91, "source": "basic_pitch", "estimated": false, "measure": 1, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p004", "pitch": 72, "name": "C5",  "start": 0.5,  "duration": 0.40, "confidence": 0.88, "source": "basic_pitch", "estimated": false, "measure": 1, "hand": "right", "beat_position": 2.0},
+      {"id": "n_p005", "pitch": 74, "name": "D5",  "start": 1.0,  "duration": 0.40, "confidence": 0.86, "source": "basic_pitch", "estimated": false, "measure": 1, "hand": "right", "beat_position": 3.0},
+      {"id": "n_p006", "pitch": 76, "name": "E5",  "start": 1.5,  "duration": 0.45, "confidence": 0.89, "source": "basic_pitch", "estimated": false, "measure": 1, "hand": "right", "beat_position": 4.0},
+      {"id": "n_p007", "pitch": 36, "name": "C3",  "start": 0.0,  "duration": 1.90, "confidence": 0.85, "source": "basic_pitch", "estimated": true,  "measure": 1, "hand": "left",  "beat_position": 1.0},
+      {"id": "n_p008", "pitch": 65, "name": "F4",  "start": 2.0,  "duration": 0.45, "confidence": 0.90, "source": "basic_pitch", "estimated": false, "measure": 2, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p009", "pitch": 69, "name": "A4",  "start": 2.0,  "duration": 0.45, "confidence": 0.87, "source": "basic_pitch", "estimated": false, "measure": 2, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p010", "pitch": 72, "name": "C5",  "start": 2.0,  "duration": 0.45, "confidence": 0.88, "source": "basic_pitch", "estimated": false, "measure": 2, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p011", "pitch": 77, "name": "F5",  "start": 2.5,  "duration": 0.40, "confidence": 0.84, "source": "basic_pitch", "estimated": false, "measure": 2, "hand": "right", "beat_position": 2.0},
+      {"id": "n_p012", "pitch": 76, "name": "E5",  "start": 3.0,  "duration": 0.40, "confidence": 0.86, "source": "basic_pitch", "estimated": false, "measure": 2, "hand": "right", "beat_position": 3.0},
+      {"id": "n_p013", "pitch": 74, "name": "D5",  "start": 3.5,  "duration": 0.45, "confidence": 0.83, "source": "basic_pitch", "estimated": false, "measure": 2, "hand": "right", "beat_position": 4.0},
+      {"id": "n_p014", "pitch": 41, "name": "F3",  "start": 2.0,  "duration": 1.90, "confidence": 0.82, "source": "basic_pitch", "estimated": true,  "measure": 2, "hand": "left",  "beat_position": 1.0},
+      {"id": "n_p015", "pitch": 67, "name": "G4",  "start": 4.0,  "duration": 0.45, "confidence": 0.91, "source": "basic_pitch", "estimated": false, "measure": 3, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p016", "pitch": 71, "name": "B4",  "start": 4.0,  "duration": 0.45, "confidence": 0.88, "source": "basic_pitch", "estimated": false, "measure": 3, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p017", "pitch": 74, "name": "D5",  "start": 4.0,  "duration": 0.45, "confidence": 0.87, "source": "basic_pitch", "estimated": false, "measure": 3, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p018", "pitch": 76, "name": "E5",  "start": 4.5,  "duration": 0.40, "confidence": 0.85, "source": "basic_pitch", "estimated": false, "measure": 3, "hand": "right", "beat_position": 2.0},
+      {"id": "n_p019", "pitch": 74, "name": "D5",  "start": 5.0,  "duration": 0.40, "confidence": 0.84, "source": "basic_pitch", "estimated": false, "measure": 3, "hand": "right", "beat_position": 3.0},
+      {"id": "n_p020", "pitch": 72, "name": "C5",  "start": 5.5,  "duration": 0.45, "confidence": 0.90, "source": "basic_pitch", "estimated": false, "measure": 3, "hand": "right", "beat_position": 4.0},
+      {"id": "n_p021", "pitch": 43, "name": "G3",  "start": 4.0,  "duration": 1.90, "confidence": 0.83, "source": "basic_pitch", "estimated": true,  "measure": 3, "hand": "left",  "beat_position": 1.0},
+      {"id": "n_p022", "pitch": 60, "name": "C4",  "start": 6.0,  "duration": 0.45, "confidence": 0.93, "source": "basic_pitch", "estimated": false, "measure": 4, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p023", "pitch": 64, "name": "E4",  "start": 6.0,  "duration": 0.45, "confidence": 0.91, "source": "basic_pitch", "estimated": false, "measure": 4, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p024", "pitch": 67, "name": "G4",  "start": 6.0,  "duration": 0.45, "confidence": 0.90, "source": "basic_pitch", "estimated": false, "measure": 4, "hand": "right", "beat_position": 1.0},
+      {"id": "n_p025", "pitch": 72, "name": "C5",  "start": 6.5,  "duration": 1.40, "confidence": 0.92, "source": "basic_pitch", "estimated": false, "measure": 4, "hand": "right", "beat_position": 2.0},
+      {"id": "n_p026", "pitch": 36, "name": "C3",  "start": 6.0,  "duration": 1.90, "confidence": 0.86, "source": "basic_pitch", "estimated": true,  "measure": 4, "hand": "left",  "beat_position": 1.0}
+    ]
+  },
+  "ai": {
+    "available": true,
+    "model": "gemini-2.0-flash",
+    "summary": {
+      "measured": "The audio is a short piano passage in C major at 120 BPM in 4/4 time. Four measures were detected with a I–IV–V–I chord progression (C–F–G–C). 26 notes were transcribed across both hands. The right hand plays triadic chords on beat 1 of each measure followed by stepwise melodic motion, while the left hand sustains bass notes (C3, F3, G3, C3) throughout each measure.",
+      "hypotheses": "The passage appears to be a simple classical-style exercise or the opening of a beginner-level piece. The consistent quarter-note pulse and clear harmonic rhythm suggest didactic material. The stepwise motion in the right hand (C5→D5→E5 in m.1, F5→E5→D5 in m.2, E5→D5→C5 in m.3) forms an arching contour typical of scale-based exercises.",
+      "limits": "Hand assignment is estimated based on pitch range (split point around middle C) and may not reflect the composer's intended fingering. Chord labels are simplified triads — inversions and extensions are not detected. The transcription covers only the first 8 seconds of a 45-second recording; additional content beyond measure 4 was not included in this excerpt."
+    }
+  },
+  "warnings": [],
+  "limits": {
+    "max_file_mb": 50,
+    "max_duration_s": 240
+  },
+  "schema_version": "1.0",
+  "created_at": "2026-11-06T10:00:00Z",
+  "completed_at": "2026-11-06T10:01:32Z",
+  "expires_at": "2026-11-07T10:00:00Z"
+}

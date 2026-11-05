@@ -1,0 +1,33 @@
+{
+  "analysis_id": "an_noai_ex_01",
+  "status": "completed",
+  "stage": "ai_interpretation",
+  "progress": 1.0,
+  "audio": {
+    "duration_seconds": 25.0,
+    "sample_rate": 22050,
+    "channels": 1
+  },
+  "music": {
+    "tempo_bpm": {"value": 100.0, "confidence": 0.85, "source": "librosa"},
+    "key": {"value": "A minor", "confidence": 0.78, "source": "librosa"},
+    "time_signature": {"value": "4/4", "confidence": 0.90, "source": "librosa"},
+    "chords": [],
+    "beats": [0.3, 0.9, 1.5, 2.1, 2.7, 3.3, 3.9, 4.5],
+    "measures": [{"index": 1, "start": 0.3, "end": 2.7}, {"index": 2, "start": 2.7, "end": 4.5}],
+    "notes": [
+      {"id": "n_a001", "pitch": 69, "name": "A4", "start": 0.3, "duration": 0.5, "confidence": 0.88, "source": "basic_pitch", "estimated": true, "measure": 1, "hand": "right"}
+    ]
+  },
+  "ai": {
+    "available": false,
+    "model": null,
+    "summary": null,
+    "error": "Gemini API is currently unavailable. The analysis results are complete but the AI explanation could not be generated."
+  },
+  "limits": {"max_file_mb": 50, "max_duration_s": 240},
+  "schema_version": "1.0",
+  "created_at": "2026-11-06T10:00:00Z",
+  "completed_at": "2026-11-06T10:01:15Z",
+  "expires_at": "2026-11-07T10:00:00Z"
+}
