@@ -223,11 +223,36 @@ def run_pipeline(app: Flask, analysis_id: str) -> None:
                         "notes": quantized_notes,
                     },
                 }
-                generate_sheet_music_pdf(pdf_result_dict, pdf_path)
+                generate_sheet_music_pdf(pdf_result_dict, pdf_path, instrument="conductor")
                 pdf_size = os.path.getsize(pdf_path)
                 save_artifact(analysis_id, "pdf", pdf_path, "application/pdf", pdf_size)
+
+                # Generate separate instrumental scores (Piano, Chant / Lead, Basse)
+                from app.services.score_generator import generate_multi_instrument_scores
+                from app.services.pdf_generator import generate_multi_instrument_pdfs
+
+                title_base = os.path.splitext(original_filename)[0].replace("_", " ").title() if original_filename else "MELODYX"
+                xml_parts = generate_multi_instrument_scores(
+                    quantized_notes, tempo_bpm, key_name, time_sig, chords, analysis_dir, analysis_id, title_prefix=title_base
+                )
+                for inst_name, x_path in xml_parts.items():
+                    if os.path.isfile(x_path):
+                        save_artifact(
+                            analysis_id, f"musicxml_{inst_name}", x_path,
+                            "application/vnd.recordare.musicxml+xml", os.path.getsize(x_path)
+                        )
+
+                pdf_parts = generate_multi_instrument_pdfs(
+                    pdf_result_dict, analysis_dir, analysis_id, title=title_base
+                )
+                for inst_name, p_path in pdf_parts.items():
+                    if os.path.isfile(p_path):
+                        save_artifact(
+                            analysis_id, f"pdf_{inst_name}", p_path,
+                            "application/pdf", os.path.getsize(p_path)
+                        )
             except Exception as pdf_exc:
-                logger.warning("[%s] PDF generation warning (non-fatal): %s", analysis_id, pdf_exc)
+                logger.warning("[%s] PDF / Multi-instrument generation warning (non-fatal): %s", analysis_id, pdf_exc)
 
             update_analysis_status(
                 analysis_id, "processing", stage="notation", progress=0.85

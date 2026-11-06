@@ -514,6 +514,83 @@
             white-space: nowrap;
         }
 
+        /* Multi-Instrument Pupitre Switcher Bar */
+        .instrument-bar-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .instrument-bar-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--gold-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .instrument-tabs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .instrument-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            user-select: none;
+        }
+
+        .instrument-tab:hover {
+            background: rgba(217, 119, 6, 0.12);
+            color: var(--text-primary);
+            border-color: rgba(217, 119, 6, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .instrument-tab.active {
+            background: linear-gradient(135deg, rgba(217, 119, 6, 0.28) 0%, rgba(217, 119, 6, 0.12) 100%);
+            border-color: var(--gold);
+            color: var(--gold-light);
+            box-shadow: 0 0 12px rgba(217, 119, 6, 0.25);
+        }
+
+        .instrument-tab .inst-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.4);
+            color: var(--text-secondary);
+            font-family: "Courier New", monospace;
+        }
+
+        .instrument-tab.active .inst-badge {
+            background: var(--gold);
+            color: #000;
+            font-weight: 700;
+        }
+
         /* Print Styling (@media print) */
         @media print {
             body {
@@ -541,7 +618,6 @@
     </style>
 </head>
 <body>
-
     <!-- Header Navigation -->
     <header>
         <div class="brand-box">
@@ -573,11 +649,11 @@
                 <div class="card-header">
                     <span class="card-title">📥 Importer une Chanson</span>
                 </div>
+                <input type="file" id="fileInput" accept="audio/*,.m4a,.mp3,.wav,.webm" style="display:none" onchange="handleFileUpload(event)">
                 <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
                     <div class="upload-icon">🎵</div>
                     <div class="upload-text">Glisser-déposer un fichier audio</div>
                     <div class="upload-sub">M4A, MP3, WAV, WebM (Max 50 Mo)</div>
-                    <input type="file" id="fileInput" accept="audio/*,.m4a,.mp3,.wav,.webm" style="display:none" onchange="handleFileUpload(event)">
                 </div>
 
                 <!-- Record Microphone -->
@@ -693,6 +769,36 @@
                 </div>
             </div>
 
+            <!-- Multi-Instrument Pupitre Switcher Bar -->
+            <div class="instrument-bar-container" id="instrumentBar">
+                <div class="instrument-bar-title">
+                    <span>🎼</span>
+                    <span>Pupitres d'Orchestre :</span>
+                </div>
+                <div class="instrument-tabs" id="instrumentTabs">
+                    <div class="instrument-tab active" data-inst="conductor" onclick="switchInstrument('conductor')">
+                        <span>🎼</span>
+                        <span>Conducteur Général</span>
+                        <span class="inst-badge">Ensemble</span>
+                    </div>
+                    <div class="instrument-tab" data-inst="piano" onclick="switchInstrument('piano')">
+                        <span>🎹</span>
+                        <span>Piano / Clavier</span>
+                        <span class="inst-badge">Sol + Fa</span>
+                    </div>
+                    <div class="instrument-tab" data-inst="lead" onclick="switchInstrument('lead')">
+                        <span>🎤</span>
+                        <span>Chant / Lead</span>
+                        <span class="inst-badge">Clé de Sol</span>
+                    </div>
+                    <div class="instrument-tab" data-inst="bass" onclick="switchInstrument('bass')">
+                        <span>🎸</span>
+                        <span>Basse</span>
+                        <span class="inst-badge">Clé de Fa</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Sheet Music Engraved Paper Canvas -->
             <div class="sheet-paper" id="paperContainer">
                 <div class="score-paper-header">
@@ -725,10 +831,18 @@
         let currentZoom = 0.85;
         let isPlaying = false;
         let currentAnalysisId = "{{ default_analysis_id }}";
+        let currentInstrument = "{{ default_instrument or 'conductor' }}";
         let analysisData = null;
         let mediaRecorder = null;
         let recordedChunks = [];
         let isRecording = false;
+
+        const INSTRUMENT_LABELS = {
+            "conductor": { name: "Conducteur Général d'Ensemble", badge: "Score Orchestre" },
+            "piano": { name: "Piano & Clavier", badge: "Double Portée (Sol + Fa)" },
+            "lead": { name: "Chant / Mélodie Lead", badge: "Portée Soliste (Clé de Sol)" },
+            "bass": { name: "Basse", badge: "Ligne de Basse (Clé de Fa)" }
+        };
 
         const audio = document.getElementById("audioPlayer");
         const btnPlay = document.getElementById("btnPlay");
@@ -766,9 +880,6 @@
         // Load MusicXML into OSMD
         async function loadMusicXML(url) {
             try {
-                const placeholder = document.getElementById("osmdPlaceholder");
-                if (placeholder) placeholder.style.display = "none";
-
                 if (!osmd) initOSMD();
                 const resp = await fetch(url);
                 if (!resp.ok) throw new Error("Could not fetch score MusicXML");
@@ -785,6 +896,15 @@
                 console.log("MusicXML rendered successfully");
             } catch (err) {
                 console.error("OSMD render error:", err);
+                const container = document.getElementById("osmdCanvas");
+                if (container && container.innerHTML.trim() === "") {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 100px 20px; color: #888;">
+                            <div style="font-size: 36px; margin-bottom: 12px;">🎼</div>
+                            <div style="font-size: 16px; font-weight: 600; color: #444; margin-bottom: 6px;">Aperçu direct de la partition</div>
+                            <div style="font-size: 13px; color: #777; max-width: 500px; margin: 0 auto 16px;">Téléchargez la partition complète haute fidélité en PDF vectoriel ou MusicXML avec les boutons ci-dessus.</div>
+                        </div>`;
+                }
             }
         }
 
@@ -886,6 +1006,67 @@
             if (audio.paused) togglePlayAudio();
         }
 
+        // Switch active instrument and reload partition score
+        async function switchInstrument(instId) {
+            currentInstrument = instId;
+
+            // Highlight active tab
+            document.querySelectorAll(".instrument-tab").forEach(tab => {
+                if (tab.getAttribute("data-inst") === instId) {
+                    tab.classList.add("active");
+                } else {
+                    tab.classList.remove("active");
+                }
+            });
+
+            if (!currentAnalysisId) return;
+
+            const instInfo = INSTRUMENT_LABELS[instId] || { name: instId, badge: "" };
+            const query = `?instrument=${instId}`;
+
+            // Update title
+            const origFn = analysisData && (analysisData.original_filename || (analysisData.audio ? analysisData.audio.filename : "")) || "Partition";
+            const cleanBase = origFn.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+            const displayTitleEl = document.getElementById("displayTitle");
+            const paperTitleEl = document.getElementById("paperTitle");
+            if (displayTitleEl) displayTitleEl.textContent = `${cleanBase} — ${instInfo.name}`;
+            if (paperTitleEl) paperTitleEl.textContent = `${cleanBase} — ${instInfo.name}`;
+
+            // Update download buttons
+            const btnPdf = document.getElementById("btnDownloadPdf");
+            const btnPdfH = document.getElementById("btnDownloadPdfHeader");
+            const btnMidi = document.getElementById("btnDownloadMidi");
+            const btnXml = document.getElementById("btnDownloadXml");
+
+            if (btnPdf) {
+                btnPdf.href = `/api/analysis/${currentAnalysisId}/pdf${query}`;
+                btnPdf.setAttribute("download", "");
+                btnPdf.style.pointerEvents = "auto";
+                btnPdf.style.opacity = "1";
+            }
+            if (btnPdfH) {
+                btnPdfH.href = `/api/analysis/${currentAnalysisId}/pdf${query}`;
+                btnPdfH.style.pointerEvents = "auto";
+                btnPdfH.style.opacity = "1";
+            }
+            if (btnMidi) {
+                btnMidi.href = `/api/analysis/${currentAnalysisId}/midi${query}`;
+                btnMidi.setAttribute("download", "");
+                btnMidi.style.pointerEvents = "auto";
+                btnMidi.style.opacity = "1";
+            }
+            if (btnXml) {
+                btnXml.href = `/api/analysis/${currentAnalysisId}/score${query}&download=1`;
+                btnXml.setAttribute("download", "");
+                btnXml.style.pointerEvents = "auto";
+                btnXml.style.opacity = "1";
+            }
+
+            // Load and render MusicXML for this instrument
+            const scoreUrl = `/api/analysis/${currentAnalysisId}/score${query}`;
+            await loadMusicXML(scoreUrl);
+        }
+
         // Load complete analysis data
         async function loadAnalysis(aid) {
             if (!aid) return;  // No analysis to load
@@ -921,20 +1102,6 @@
                 const elPaperKey = document.getElementById("paperMetaKey");
                 if (elPaperKey) elPaperKey.textContent = `Tonalité: ${key}`;
 
-                // Update download buttons — always use standard API routes
-                const btnPdf = document.getElementById("btnDownloadPdf");
-                const btnPdfH = document.getElementById("btnDownloadPdfHeader");
-                const btnMidi = document.getElementById("btnDownloadMidi");
-                const btnXml = document.getElementById("btnDownloadXml");
-
-                btnPdf.href = `/api/analysis/${aid}/pdf`;
-                btnPdf.setAttribute("download", ""); btnPdf.style.pointerEvents = "auto"; btnPdf.style.opacity = "1";
-                btnPdfH.href = `/api/analysis/${aid}/pdf`;
-                btnPdfH.style.pointerEvents = "auto"; btnPdfH.style.opacity = "1";
-                btnMidi.href = `/api/analysis/${aid}/midi`;
-                btnMidi.setAttribute("download", ""); btnMidi.style.pointerEvents = "auto"; btnMidi.style.opacity = "1";
-                btnXml.href = `/api/analysis/${aid}/score`;
-                btnXml.setAttribute("download", ""); btnXml.style.pointerEvents = "auto"; btnXml.style.opacity = "1";
                 audio.src = `/api/analysis/${aid}/audio`;
 
                 // Render chord pills
@@ -955,25 +1122,35 @@
                     chordList.appendChild(span);
                 });
 
-                // Load score MusicXML
-                const scoreUrl = `/api/analysis/${aid}/score`;
-                await loadMusicXML(scoreUrl);
+                // Switch and display current instrument score
+                await switchInstrument(currentInstrument || "conductor");
 
             } catch (err) {
                 console.error("Error loading analysis:", err);
             }
         }
 
-        // File upload handling
+        // File upload handling (supports click selection & drag-and-drop)
         async function handleFileUpload(event) {
-            const file = event.target.files[0];
+            let file = null;
+            if (event.target && event.target.files && event.target.files.length > 0) {
+                file = event.target.files[0];
+            } else if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+                file = event.dataTransfer.files[0];
+            } else if (event instanceof File) {
+                file = event;
+            }
             if (!file) return;
+
+            const fileInput = document.getElementById("fileInput");
+            if (fileInput) fileInput.value = "";
 
             const formData = new FormData();
             formData.append("file", file);
+            formData.append("audio", file);
 
             const uploadZone = document.getElementById("dropZone");
-            uploadZone.innerHTML = `<div class="upload-icon">⏳</div><div class="upload-text">Analyse & Transcription en cours...</div><div class="upload-sub">Détection des portées, notes, tonalité et accords...</div>`;
+            uploadZone.innerHTML = `<div class="upload-icon">⏳</div><div class="upload-text">Analyse &amp; Transcription en cours...</div><div class="upload-sub">Détection des portées, notes, tonalité et accords...</div>`;
 
             try {
                 const resp = await fetch("/api/audio/upload", {
@@ -1002,13 +1179,13 @@
                         clearInterval(interval);
                         uploadZone.innerHTML = `<div class="upload-icon">✅</div><div class="upload-text">Partition générée avec succès !</div><div class="upload-sub">Chargement du visualiseur...</div>`;
                         setTimeout(() => {
-                            uploadZone.innerHTML = `<div class="upload-icon">🎵</div><div class="upload-text">Glisser-déposer un fichier audio</div><div class="upload-sub">M4A, MP3, WAV, WebM</div>`;
+                            uploadZone.innerHTML = `<div class="upload-icon">🎵</div><div class="upload-text">Glisser-déposer un fichier audio</div><div class="upload-sub">M4A, MP3, WAV, WebM (Max 50 Mo)</div>`;
                             loadAnalysis(aid);
-                        }, 1200);
+                        }, 1000);
                     } else if (an.status === "failed") {
                         clearInterval(interval);
                         alert("Erreur d'analyse : " + (an.error_message || "Échec"));
-                        uploadZone.innerHTML = `<div class="upload-icon">❌</div><div class="upload-text">Échec</div>`;
+                        uploadZone.innerHTML = `<div class="upload-icon">❌</div><div class="upload-text">Échec</div><div class="upload-sub">Cliquez pour réessayer</div>`;
                     } else {
                         const pct = Math.round((an.progress || 0) * 100);
                         uploadZone.innerHTML = `<div class="upload-icon">⏳</div><div class="upload-text">Transcription (${pct}%)</div><div class="upload-sub">Étape : ${an.stage || 'traitement'}</div>`;
@@ -1071,7 +1248,33 @@
 
         // Initial setup on load
         window.addEventListener("DOMContentLoaded", () => {
-            initOSMD();
+            // Setup Drag & Drop on upload zone
+            const dropZone = document.getElementById("dropZone");
+            if (dropZone) {
+                ["dragenter", "dragover"].forEach(eventName => {
+                    dropZone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropZone.classList.add("dragover");
+                    }, false);
+                });
+                ["dragleave", "dragend"].forEach(eventName => {
+                    dropZone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropZone.classList.remove("dragover");
+                    }, false);
+                });
+                dropZone.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove("dragover");
+                    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleFileUpload(e);
+                    }
+                }, false);
+            }
+
             const defaultAid = "{{ default_analysis_id }}";
             if (defaultAid) {
                 loadAnalysis(defaultAid);

@@ -18,27 +18,53 @@ def index():
 
     Each uploaded song has its own analysis — no hardcoded demo.
     """
-    # Re-use the model-level get_or_create_session which properly inserts
-    # into the sessions table, so the upload route will recognise the same sid.
-    sid = get_or_create_session()
-    is_new = request.cookies.get("melodyx_sid") is None
+    param_sid = request.args.get("session_id")
+    sid = param_sid or get_or_create_session()
 
-    # Optionally load a specific analysis if passed as query param
+    # Optionally load a specific analysis if passed as query param, or latest for this session
     req_aid = request.args.get("analysis_id", "")
+    if not req_aid:
+        try:
+            from app.extensions import get_db
+            db = get_db()
+            row = db.execute(
+                "SELECT id FROM analyses WHERE session_id = ? AND status = 'completed' ORDER BY created_at DESC LIMIT 1",
+                (sid,),
+            ).fetchone()
+            if row:
+                req_aid = row["id"]
+            else:
+                # If current session has no completed analyses yet, link latest completed
+                latest = db.execute(
+                    "SELECT id FROM analyses WHERE status = 'completed' ORDER BY created_at DESC LIMIT 1"
+                ).fetchone()
+                if latest:
+                    req_aid = latest["id"]
+                    db.execute(
+                        "UPDATE analyses SET session_id = ? WHERE id = ?",
+                        (sid, req_aid),
+                    )
+                    db.commit()
+        except Exception:
+            pass
+
+    inst = request.args.get("instrument", "conductor").lower()
+    if inst not in ("conductor", "piano", "lead", "bass"):
+        inst = "conductor"
 
     resp = make_response(render_template(
         "index.html",
         session_id=sid,
         default_analysis_id=req_aid,
+        default_instrument=inst,
     ))
 
-    if is_new:
-        resp.set_cookie(
-            "melodyx_sid",
-            sid,
-            max_age=86400 * 30,
-            httponly=False,
-            samesite="Lax",
-        )
+    resp.set_cookie(
+        "melodyx_sid",
+        sid,
+        max_age=86400 * 30,
+        httponly=False,
+        samesite="Lax",
+    )
 
     return resp

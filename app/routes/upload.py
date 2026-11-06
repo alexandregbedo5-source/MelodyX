@@ -149,7 +149,11 @@ def upload_audio():
     session_id = get_or_create_session()
 
     # 2. File presence ----------------------------------------------------
-    audio_file = request.files.get("audio") or request.files.get("file")
+    audio_file = (
+        request.files.get("audio")
+        or request.files.get("file")
+        or (next(iter(request.files.values())) if request.files else None)
+    )
     if audio_file is None:
         return jsonify({"error": {"code": "invalid_request", "message": "No audio file provided."}}), 400
     if audio_file.filename is None or audio_file.filename.strip() == "":

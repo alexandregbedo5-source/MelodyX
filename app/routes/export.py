@@ -18,8 +18,8 @@ export_bp = Blueprint("export", __name__, url_prefix="/api")
 # ---------------------------------------------------------------------------
 
 def _session_id() -> Optional[str]:
-    """Return the session id from the request cookie, or *None*."""
-    return request.cookies.get("melodyx_sid")
+    """Return the session id from the request cookie or query param, or *None*."""
+    return request.cookies.get("melodyx_sid") or request.args.get("session_id")
 
 
 def _get_completed_analysis(analysis_id: str, session_id: str):
@@ -75,7 +75,10 @@ def _artifact_path_by_dir(analysis: dict, filename: str) -> Optional[str]:
 
 @export_bp.route("/analysis/<analysis_id>/score", methods=["GET"])
 def export_score(analysis_id: str):
-    """Serve the MusicXML score file for a completed analysis."""
+    """Serve the MusicXML score file for a completed analysis.
+    
+    Supports ?instrument=conductor|piano|lead|bass
+    """
     sid = _session_id()
     if not sid:
         return jsonify({"error": {"code": "not_found", "message": "Analysis not found."}}), 404
@@ -84,24 +87,94 @@ def export_score(analysis_id: str):
     if err:
         return err
 
-    # Try artifacts table first, then directory
-    artifact = _find_artifact_path(analysis_id, sid, "musicxml")
-    if artifact is None:
-        artifact = _artifact_path_by_dir(analysis, f"{analysis_id}.musicxml")
-    if artifact is None:
-        return jsonify({"error": {"code": "not_found", "message": "Score file not found."}}), 404
+    instrument = request.args.get("instrument", "conductor").lower()
+    if instrument not in ("conductor", "piano", "lead", "bass"):
+        instrument = "conductor"
+
+    stored_path = analysis.get("stored_path", "")
+    analysis_dir = str(Path(stored_path).parent) if stored_path else ""
+
+    if instrument == "conductor":
+        filename = f"{analysis_id}.musicxml"
+    else:
+        filename = f"{analysis_id}_{instrument}.musicxml"
+
+    artifact = os.path.join(analysis_dir, filename) if analysis_dir else None
+
+    # Generate on-the-fly if not already on disk
+    if artifact is None or not os.path.isfile(artifact):
+        result = analysis.get("result")
+        if not result:
+            db = get_db()
+            row = db.execute(
+                "SELECT result_json FROM analysis_results WHERE analysis_id = ? ORDER BY created_at DESC LIMIT 1",
+                (analysis_id,),
+            ).fetchone()
+            if row and row["result_json"]:
+                try:
+                    result = _json.loads(row["result_json"])
+                except Exception:
+                    result = {}
+
+        if result and result.get("music"):
+            try:
+                from app.services.stem_separator import dispatch_notes_to_instruments
+                from app.services.score_generator import generate_musicxml
+
+                music = result["music"]
+                notes = music.get("notes", [])
+                tempo = music.get("tempo_bpm", {}).get("value", 120.0)
+                key_name = music.get("key", {}).get("value", "C major")
+                time_sig = music.get("time_signature", {}).get("value", "4/4")
+                chords = music.get("chords", [])
+
+                dispatched = dispatch_notes_to_instruments(notes)
+                inst_notes = dispatched.get(instrument, notes)
+
+                target_path = os.path.join(analysis_dir, filename)
+                orig_fn = analysis.get("original_filename", "Score")
+                generate_musicxml(
+                    inst_notes,
+                    tempo,
+                    key_name,
+                    time_sig,
+                    chords,
+                    target_path,
+                    instrument_type=instrument,
+                    title=f"{orig_fn} — {instrument.title()}",
+                )
+                artifact = target_path
+            except Exception as exc:
+                current_app.logger.warning("On-the-fly MusicXML generation failed: %s", exc)
+
+    if artifact is None or not os.path.isfile(artifact):
+        artifact = _find_artifact_path(analysis_id, sid, "musicxml")
+        if artifact is None:
+            artifact = _artifact_path_by_dir(analysis, f"{analysis_id}.musicxml")
+        if artifact is None:
+            return jsonify({"error": {"code": "not_found", "message": "Score file not found."}}), 404
+
+    is_download = request.args.get("download") == "1"
+    download_name = f"{analysis_id}_{instrument}.musicxml"
+    orig_fn = analysis.get("original_filename")
+    if orig_fn:
+        base_orig = os.path.splitext(orig_fn)[0]
+        download_name = f"{base_orig}_{instrument}.musicxml"
 
     return send_file(
         artifact,
         mimetype="application/vnd.recordare.musicxml+xml",
-        as_attachment=True,
-        download_name=f"{analysis_id}_score.musicxml",
+        as_attachment=is_download,
+        download_name=download_name,
     )
 
 
 @export_bp.route("/analysis/<analysis_id>/midi", methods=["GET"])
 def export_midi(analysis_id: str):
-    """Serve the MIDI file for a completed analysis."""
+    """Serve the MIDI file for a completed analysis.
+    
+    Supports ?instrument=conductor|piano|lead|bass
+    """
     sid = _session_id()
     if not sid:
         return jsonify({"error": {"code": "not_found", "message": "Analysis not found."}}), 404
@@ -110,17 +183,70 @@ def export_midi(analysis_id: str):
     if err:
         return err
 
-    artifact = _find_artifact_path(analysis_id, sid, "midi")
-    if artifact is None:
-        artifact = _artifact_path_by_dir(analysis, f"{analysis_id}.mid")
-    if artifact is None:
-        return jsonify({"error": {"code": "not_found", "message": "MIDI file not found."}}), 404
+    instrument = request.args.get("instrument", "conductor").lower()
+    if instrument not in ("conductor", "piano", "lead", "bass"):
+        instrument = "conductor"
+
+    stored_path = analysis.get("stored_path", "")
+    analysis_dir = str(Path(stored_path).parent) if stored_path else ""
+
+    if instrument == "conductor":
+        filename = f"{analysis_id}.mid"
+    else:
+        filename = f"{analysis_id}_{instrument}.mid"
+
+    artifact = os.path.join(analysis_dir, filename) if analysis_dir else None
+
+    # Generate on-the-fly if instrument-specific MIDI does not exist
+    if artifact is None or not os.path.isfile(artifact):
+        if instrument != "conductor":
+            result = analysis.get("result")
+            if not result:
+                db = get_db()
+                row = db.execute(
+                    "SELECT result_json FROM analysis_results WHERE analysis_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (analysis_id,),
+                ).fetchone()
+                if row and row["result_json"]:
+                    try:
+                        result = _json.loads(row["result_json"])
+                    except Exception:
+                        result = {}
+            if result and result.get("music"):
+                try:
+                    from app.services.stem_separator import dispatch_notes_to_instruments
+                    from app.services.midi_generator import generate_midi
+
+                    music = result["music"]
+                    notes = music.get("notes", [])
+                    tempo = music.get("tempo_bpm", {}).get("value", 120.0)
+                    dispatched = dispatch_notes_to_instruments(notes)
+                    inst_notes = dispatched.get(instrument, notes)
+
+                    target_mid = os.path.join(analysis_dir, filename)
+                    generate_midi(inst_notes, tempo, target_mid)
+                    artifact = target_mid
+                except Exception as exc:
+                    current_app.logger.warning("Failed on-the-fly MIDI generation: %s", exc)
+
+    if artifact is None or not os.path.isfile(artifact):
+        artifact = _find_artifact_path(analysis_id, sid, "midi")
+        if artifact is None:
+            artifact = _artifact_path_by_dir(analysis, f"{analysis_id}.mid")
+        if artifact is None:
+            return jsonify({"error": {"code": "not_found", "message": "MIDI file not found."}}), 404
+
+    download_name = f"{analysis_id}_{instrument}.mid"
+    orig_fn = analysis.get("original_filename")
+    if orig_fn:
+        base_orig = os.path.splitext(orig_fn)[0]
+        download_name = f"{base_orig}_{instrument}.mid"
 
     return send_file(
         artifact,
         mimetype="audio/midi",
         as_attachment=True,
-        download_name=f"{analysis_id}.mid",
+        download_name=download_name,
     )
 
 
@@ -168,6 +294,7 @@ def export_pdf(analysis_id: str):
     """Serve the classical sheet music PDF score for a completed analysis.
     
     Generates on-the-fly if not already pre-rendered in artifacts.
+    Supports ?instrument=conductor|piano|lead|bass
     Supports ?inline=1 for in-browser rendering.
     """
     sid = _session_id()
@@ -178,22 +305,34 @@ def export_pdf(analysis_id: str):
     if err:
         return err
 
-    # Check artifacts table first
-    artifact = _find_artifact_path(analysis_id, sid, "pdf")
-    if artifact is None:
-        artifact = _artifact_path_by_dir(analysis, f"{analysis_id}_partition.pdf")
-    if artifact is None:
-        artifact = _artifact_path_by_dir(analysis, f"{analysis_id}.pdf")
+    instrument = request.args.get("instrument", "conductor").lower()
+    if instrument not in ("conductor", "piano", "lead", "bass"):
+        instrument = "conductor"
+
+    stored_path = analysis.get("stored_path", "")
+    analysis_dir = str(Path(stored_path).parent) if stored_path else ""
+
+    if instrument == "conductor":
+        filename = f"{analysis_id}.pdf"
+    else:
+        filename = f"{analysis_id}_{instrument}.pdf"
+
+    artifact = os.path.join(analysis_dir, filename) if analysis_dir else None
+
+    # Check fallback filenames for default/conductor
+    if (artifact is None or not os.path.isfile(artifact)) and instrument == "conductor":
+        artifact = _find_artifact_path(analysis_id, sid, "pdf")
+        if artifact is None:
+            artifact = _artifact_path_by_dir(analysis, f"{analysis_id}_partition.pdf")
+        if artifact is None:
+            artifact = _artifact_path_by_dir(analysis, f"{analysis_id}.pdf")
 
     # If artifact does not yet exist, generate on-the-fly from analysis results
     if artifact is None or not os.path.isfile(artifact):
-        stored_path = analysis.get("stored_path", "")
         if not stored_path:
             return jsonify({"error": {"code": "not_found", "message": "Score file not found."}}), 404
-        
-        analysis_dir = str(Path(stored_path).parent)
-        pdf_filename = f"{analysis_id}_partition.pdf"
-        target_path = os.path.join(analysis_dir, pdf_filename)
+
+        target_path = os.path.join(analysis_dir, filename)
 
         # Fetch result data
         result = analysis.get("result")
@@ -216,14 +355,14 @@ def export_pdf(analysis_id: str):
             from app.services.pdf_generator import generate_sheet_music_pdf
             orig_name = analysis.get("original_filename", "")
             title = os.path.splitext(orig_name)[0].replace("_", " ").title() if orig_name else "Partition MELODYX"
-            generate_sheet_music_pdf(result, target_path, title=title)
+            generate_sheet_music_pdf(result, target_path, title=title, instrument=instrument)
             artifact = target_path
 
             # Register in artifacts table
             try:
                 from app.models.analysis import save_artifact
                 pdf_size = os.path.getsize(target_path)
-                save_artifact(analysis_id, "pdf", target_path, "application/pdf", pdf_size)
+                save_artifact(analysis_id, f"pdf_{instrument}", target_path, "application/pdf", pdf_size)
             except Exception as e:
                 current_app.logger.warning("Could not register PDF artifact: %s", e)
         except Exception as exc:
@@ -231,11 +370,11 @@ def export_pdf(analysis_id: str):
             return jsonify({"error": {"code": "internal_error", "message": "Failed to generate PDF sheet music."}}), 500
 
     is_inline = request.args.get("inline") == "1"
-    download_name = f"{analysis_id}_partition.pdf"
+    download_name = f"{analysis_id}_{instrument}.pdf"
     orig_fn = analysis.get("original_filename")
     if orig_fn:
         base_orig = os.path.splitext(orig_fn)[0]
-        download_name = f"{base_orig}_partition.pdf"
+        download_name = f"{base_orig}_{instrument}.pdf"
 
     return send_file(
         artifact,

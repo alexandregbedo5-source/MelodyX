@@ -25,8 +25,8 @@ analysis_bp = Blueprint("analysis", __name__, url_prefix="/api")
 # ---------------------------------------------------------------------------
 
 def _session_id() -> Optional[str]:
-    """Return the session id from the request cookie, or *None*."""
-    return request.cookies.get("melodyx_sid")
+    """Return the session id from the request cookie or query param, or *None*."""
+    return request.cookies.get("melodyx_sid") or request.args.get("session_id")
 
 
 def _build_full_response(analysis: dict) -> dict:
@@ -107,6 +107,25 @@ def get_analysis_route(analysis_id: str):
 
     payload = _build_full_response(analysis)
     return jsonify(payload), 200
+
+
+@analysis_bp.route("/analysis/<analysis_id>/instruments", methods=["GET"])
+def get_analysis_instruments(analysis_id: str):
+    """Return available instrument scores and metadata for an analysis."""
+    sid = _session_id()
+    if not sid:
+        return jsonify({"error": {"code": "not_found", "message": "Analysis not found."}}), 404
+
+    analysis = get_analysis(analysis_id, sid)
+    if analysis is None:
+        return jsonify({"error": {"code": "not_found", "message": "Analysis not found."}}), 404
+
+    from app.services.stem_separator import AVAILABLE_INSTRUMENTS
+    return jsonify({
+        "analysis_id": analysis_id,
+        "default": "conductor",
+        "instruments": AVAILABLE_INSTRUMENTS,
+    }), 200
 
 
 @analysis_bp.route("/analysis/start", methods=["POST"])

@@ -17,3 +17,8 @@ venv/
 dist/
 build/
 .pytest_cache/
+scripts/*.png
+scripts/*.html
+scripts/*.xml
+scripts/test_output/
+scripts/test_ui_results/

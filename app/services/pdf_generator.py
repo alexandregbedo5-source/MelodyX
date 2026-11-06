@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+from pathlib import Path
 from typing import Any, Optional
 
 from reportlab.lib.colors import HexColor
@@ -156,9 +157,9 @@ def draw_key_signature(
     c: canvas.Canvas,
     key_name: str,
     x: float,
-    treble_y: float,
-    bass_y: float,
-    sp: float,
+    treble_y: Optional[float] = None,
+    bass_y: Optional[float] = None,
+    sp: float = 7.0,
 ) -> float:
     """Draw key signature accidentals and return the horizontal width consumed."""
     key_clean = key_name.strip()
@@ -185,8 +186,10 @@ def draw_key_signature(
         sx = x + i * 7.5
         t_pos = flats_treble[i] if is_flat else sharps_treble[i]
         b_pos = flats_bass[i] if is_flat else sharps_bass[i]
-        c.drawString(sx, treble_y + t_pos * sp - 4, symbol)
-        c.drawString(sx, bass_y + b_pos * sp - 4, symbol)
+        if treble_y is not None:
+            c.drawString(sx, treble_y + t_pos * sp - 4, symbol)
+        if bass_y is not None:
+            c.drawString(sx, bass_y + b_pos * sp - 4, symbol)
 
     return min(num_acc, 7) * 7.5
 
@@ -377,6 +380,7 @@ def generate_sheet_music_pdf(
     title: Optional[str] = None,
     subtitle: Optional[str] = None,
     max_measures: Optional[int] = None,
+    instrument: str = "piano",
 ) -> str:
     """Generate a publication-grade classical sheet music score PDF from analysis results."""
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -392,15 +396,33 @@ def generate_sheet_music_pdf(
     time_sig = time_sig_info.get("value", "4/4") if isinstance(time_sig_info, dict) else str(time_sig_info or "4/4")
     chords = music.get("chords", [])
 
+    is_single_staff = instrument in ("bass", "lead")
+
     if not title:
         raw_fn = result_data.get("audio", {}).get("filename", "")
         if raw_fn:
-            title = os.path.splitext(os.path.basename(raw_fn))[0].replace("_", " ").title()
+            base_t = os.path.splitext(os.path.basename(raw_fn))[0].replace("_", " ").title()
         else:
-            title = "Transcription pour Piano & Ensemble"
+            base_t = "Partition MELODYX"
+
+        if instrument == "bass":
+            title = f"{base_t} — Basse"
+        elif instrument == "lead":
+            title = f"{base_t} — Chant / Lead"
+        elif instrument == "conductor":
+            title = f"{base_t} — Conducteur d'Orchestre"
+        else:
+            title = f"{base_t} — Transcription Piano Solo"
 
     if not subtitle:
-        subtitle = "MELODYX Concert Score — Édition d'Orchestre"
+        if instrument == "bass":
+            subtitle = "Édition Conforme Opéra & Orchestre • Clé de Fa (Basse Électrique / Contrebasse)"
+        elif instrument == "lead":
+            subtitle = "Édition Conforme Opéra & Orchestre • Clé de Sol (Ligne Mélodique & Thème)"
+        elif instrument == "conductor":
+            subtitle = "Partition Complète d'Ensemble & Direction Musicale"
+        else:
+            subtitle = "Édition Conforme Opéra & Orchestre • Clés de Sol & Fa"
 
     notes_by_measure: dict[int, list[dict]] = {}
     for n in notes:
@@ -426,8 +448,7 @@ def generate_sheet_music_pdf(
         total_measures = max_measures
 
     measures_per_system = 4
-    total_systems = math.ceil(total_measures / measures_per_system)
-    total_score_pages = max(1, 1 + math.ceil(max(0, total_systems - 4) / 4))
+    systems_per_page = 6 if is_single_staff else 4
 
     c = canvas.Canvas(output_path, pagesize=A4)
 
@@ -438,6 +459,8 @@ def generate_sheet_music_pdf(
         1: "A", 9: "B", 17: "C", 25: "D", 33: "E", 41: "F",
         49: "G", 57: "H", 65: "I", 73: "J", 81: "K", 89: "L", 97: "M",
     }
+
+    SINGLE_SYSTEM_GAP = 54.0
 
     while cur_measure <= total_measures:
         if page_num == 1:
@@ -462,7 +485,7 @@ def generate_sheet_music_pdf(
             c.line(MARGIN_LEFT, PAGE_H - 85, MARGIN_RIGHT, PAGE_H - 85)
 
             first_treble_y = PAGE_H - 148
-            num_systems_this_page = 4
+            first_single_y = PAGE_H - 138
         else:
             c.setFont("Times-Italic", 9)
             c.drawString(MARGIN_LEFT, PAGE_H - 35, title)
@@ -472,106 +495,200 @@ def generate_sheet_music_pdf(
             c.line(MARGIN_LEFT, PAGE_H - 40, MARGIN_RIGHT, PAGE_H - 40)
 
             first_treble_y = PAGE_H - 92
-            num_systems_this_page = 4
+            first_single_y = PAGE_H - 86
 
-        for sys_idx in range(num_systems_this_page):
+        for sys_idx in range(systems_per_page):
             if cur_measure > total_measures:
                 break
 
-            treble_y = first_treble_y - sys_idx * (SYSTEM_H + SYSTEM_GAP)
-            bass_y = treble_y - INTER_STAFF_GAP - STAFF_H
-            sys_y = bass_y
+            if is_single_staff:
+                # ---------------- SINGLE-STAFF SYSTEM (Bass / Lead) ----------------
+                sys_y = first_single_y - sys_idx * (STAFF_H + SINGLE_SYSTEM_GAP)
 
-            c.setStrokeColorRGB(0.12, 0.12, 0.12)
-            c.setLineWidth(0.5)
-            for i in range(5):
-                c.line(MARGIN_LEFT, treble_y + i * LINE_SP, MARGIN_RIGHT, treble_y + i * LINE_SP)
-                c.line(MARGIN_LEFT, bass_y + i * LINE_SP, MARGIN_RIGHT, bass_y + i * LINE_SP)
+                c.setStrokeColorRGB(0.12, 0.12, 0.12)
+                c.setLineWidth(0.5)
+                for i in range(5):
+                    c.line(MARGIN_LEFT, sys_y + i * LINE_SP, MARGIN_RIGHT, sys_y + i * LINE_SP)
 
-            draw_brace(c, MARGIN_LEFT, treble_y + 4 * LINE_SP, bass_y)
-            c.setLineWidth(0.8)
-            c.line(MARGIN_LEFT, bass_y, MARGIN_LEFT, treble_y + 4 * LINE_SP)
+                c.setLineWidth(0.8)
+                c.line(MARGIN_LEFT, sys_y, MARGIN_LEFT, sys_y + 4 * LINE_SP)
 
-            c.setFont("Times-Roman", 8)
-            label = "Piano" if (page_num == 1 and sys_idx == 0) else "Pno."
-            c.drawRightString(MARGIN_LEFT - 14, sys_y + (SYSTEM_H / 2.0) - 3, label)
-
-            draw_treble_clef(c, MARGIN_LEFT + 8, treble_y, LINE_SP)
-            draw_bass_clef(c, MARGIN_LEFT + 8, bass_y, LINE_SP)
-
-            key_w = draw_key_signature(c, key_name, MARGIN_LEFT + 28, treble_y, bass_y, LINE_SP)
-
-            meas_start_x = MARGIN_LEFT + 32 + key_w
-            if page_num == 1 and sys_idx == 0:
-                ts_parts = time_sig.split("/")
-                top_digit = ts_parts[0] if ts_parts else "4"
-                bot_digit = ts_parts[1] if len(ts_parts) > 1 else "4"
-                c.setFont("Times-Bold", 12)
-                c.drawCentredString(meas_start_x + 6, treble_y + 2.5 * LINE_SP, top_digit)
-                c.drawCentredString(meas_start_x + 6, treble_y + 0.5 * LINE_SP, bot_digit)
-                c.drawCentredString(meas_start_x + 6, bass_y + 2.5 * LINE_SP, top_digit)
-                c.drawCentredString(meas_start_x + 6, bass_y + 0.5 * LINE_SP, bot_digit)
-                meas_start_x += 16
-
-            sec_letter = section_letters.get(cur_measure, "")
-            if sec_letter:
-                c.setFont("Times-Bold", 9)
-                c.rect(meas_start_x + 2, treble_y + 4 * LINE_SP + 14, 12, 11, stroke=1, fill=0)
-                c.drawCentredString(meas_start_x + 8, treble_y + 4 * LINE_SP + 16, sec_letter)
-
-            avail_w = MARGIN_RIGHT - meas_start_x
-            bar_w = avail_w / measures_per_system
-
-            for b in range(measures_per_system):
-                if cur_measure > total_measures:
-                    break
-
-                m_num = cur_measure
-                bx = meas_start_x + b * bar_w
-                bx_end = bx + bar_w
-
-                c.setLineWidth(0.6)
-                if m_num == total_measures:
-                    c.line(bx_end - 3, bass_y, bx_end - 3, treble_y + 4 * LINE_SP)
-                    c.setLineWidth(1.6)
-                    c.line(bx_end, bass_y, bx_end, treble_y + 4 * LINE_SP)
+                if instrument == "bass":
+                    draw_bass_clef(c, MARGIN_LEFT + 8, sys_y, LINE_SP)
+                    base_step = BASS_BOTTOM_STEP
+                    label = "Basse" if (page_num == 1 and sys_idx == 0) else "Bass"
+                    key_w = draw_key_signature(c, key_name, MARGIN_LEFT + 28, treble_y=None, bass_y=sys_y, sp=LINE_SP)
                 else:
-                    c.line(bx_end, bass_y, bx_end, treble_y + 4 * LINE_SP)
+                    draw_treble_clef(c, MARGIN_LEFT + 8, sys_y, LINE_SP)
+                    base_step = TREBLE_BOTTOM_STEP
+                    label = "Chant" if (page_num == 1 and sys_idx == 0) else "Lead"
+                    key_w = draw_key_signature(c, key_name, MARGIN_LEFT + 28, treble_y=sys_y, bass_y=None, sp=LINE_SP)
 
-                c.setFont("Times-Italic", 7.5)
-                c.drawString(bx + 3, treble_y + 4 * LINE_SP + 3, str(m_num))
+                c.setFont("Times-Roman", 8)
+                c.drawRightString(MARGIN_LEFT - 10, sys_y + 2 * LINE_SP - 3, label)
 
-                ch_label = chord_by_measure.get(m_num, "")
-                if ch_label:
+                meas_start_x = MARGIN_LEFT + 32 + key_w
+                if page_num == 1 and sys_idx == 0:
+                    ts_parts = time_sig.split("/")
+                    top_digit = ts_parts[0] if ts_parts else "4"
+                    bot_digit = ts_parts[1] if len(ts_parts) > 1 else "4"
+                    c.setFont("Times-Bold", 12)
+                    c.drawCentredString(meas_start_x + 6, sys_y + 2.5 * LINE_SP, top_digit)
+                    c.drawCentredString(meas_start_x + 6, sys_y + 0.5 * LINE_SP, bot_digit)
+                    meas_start_x += 16
+
+                sec_letter = section_letters.get(cur_measure, "")
+                if sec_letter:
                     c.setFont("Times-Bold", 9)
-                    c.drawCentredString(bx + bar_w / 2.0, treble_y + 4 * LINE_SP + 4, ch_label)
+                    c.rect(meas_start_x + 2, sys_y + 4 * LINE_SP + 14, 12, 11, stroke=1, fill=0)
+                    c.drawCentredString(meas_start_x + 8, sys_y + 4 * LINE_SP + 16, sec_letter)
 
-                m_notes = notes_by_measure.get(m_num, [])
-                t_chords, b_chords = group_notes_into_chords(m_notes)
+                avail_w = MARGIN_RIGHT - meas_start_x
+                bar_w = avail_w / measures_per_system
 
-                treble_stems: list = []
-                bass_stems: list = []
+                for b in range(measures_per_system):
+                    if cur_measure > total_measures:
+                        break
 
-                for ch in t_chords:
-                    beat_pos = ch["beat"]
-                    nx = bx + 10 + (beat_pos / 4.0) * (bar_w - 20)
-                    sx, tip, is_up, root = draw_chord(
-                        c, nx, ch["pitches"], treble_y, treble_y + 4 * LINE_SP, LINE_SP, TREBLE_BOTTOM_STEP
-                    )
-                    treble_stems.append((sx, tip, is_up, root, beat_pos))
+                    m_num = cur_measure
+                    bx = meas_start_x + b * bar_w
+                    bx_end = bx + bar_w
 
-                for ch in b_chords:
-                    beat_pos = ch["beat"]
-                    nx = bx + 10 + (beat_pos / 4.0) * (bar_w - 20)
-                    sx, tip, is_up, root = draw_chord(
-                        c, nx, ch["pitches"], bass_y, bass_y + 4 * LINE_SP, LINE_SP, BASS_BOTTOM_STEP
-                    )
-                    bass_stems.append((sx, tip, is_up, root, beat_pos))
+                    c.setLineWidth(0.6)
+                    if m_num == total_measures:
+                        c.line(bx_end - 3, sys_y, bx_end - 3, sys_y + 4 * LINE_SP)
+                        c.setLineWidth(1.6)
+                        c.line(bx_end, sys_y, bx_end, sys_y + 4 * LINE_SP)
+                    else:
+                        c.line(bx_end, sys_y, bx_end, sys_y + 4 * LINE_SP)
 
-                draw_beams_for_measure(c, treble_stems)
-                draw_beams_for_measure(c, bass_stems)
+                    c.setFont("Times-Italic", 7.5)
+                    c.drawString(bx + 3, sys_y + 4 * LINE_SP + 3, str(m_num))
 
-                cur_measure += 1
+                    ch_label = chord_by_measure.get(m_num, "")
+                    if ch_label:
+                        c.setFont("Times-Bold", 9)
+                        c.drawCentredString(bx + bar_w / 2.0, sys_y + 4 * LINE_SP + 4, ch_label)
+
+                    m_notes = notes_by_measure.get(m_num, [])
+                    if instrument == "bass":
+                        filt_notes = [n for n in m_notes if n.get("pitch", 60) < 57 or n.get("hand") == "left"]
+                    else:
+                        filt_notes = [n for n in m_notes if n.get("pitch", 60) >= 55 or n.get("hand") == "right"]
+
+                    t_ch, b_ch = group_notes_into_chords(filt_notes)
+                    active_chords = b_ch if instrument == "bass" else t_ch
+
+                    stems: list = []
+                    for ch in active_chords:
+                        beat_pos = ch["beat"]
+                        nx = bx + 10 + (beat_pos / 4.0) * (bar_w - 20)
+                        sx, tip, is_up, root = draw_chord(
+                            c, nx, ch["pitches"], sys_y, sys_y + 4 * LINE_SP, LINE_SP, base_step
+                        )
+                        stems.append((sx, tip, is_up, root, beat_pos))
+
+                    draw_beams_for_measure(c, stems)
+                    cur_measure += 1
+
+            else:
+                # ---------------- GRAND STAFF SYSTEM (Piano / Conductor) ----------------
+                treble_y = first_treble_y - sys_idx * (SYSTEM_H + SYSTEM_GAP)
+                bass_y = treble_y - INTER_STAFF_GAP - STAFF_H
+                sys_y = bass_y
+
+                c.setStrokeColorRGB(0.12, 0.12, 0.12)
+                c.setLineWidth(0.5)
+                for i in range(5):
+                    c.line(MARGIN_LEFT, treble_y + i * LINE_SP, MARGIN_RIGHT, treble_y + i * LINE_SP)
+                    c.line(MARGIN_LEFT, bass_y + i * LINE_SP, MARGIN_RIGHT, bass_y + i * LINE_SP)
+
+                draw_brace(c, MARGIN_LEFT, treble_y + 4 * LINE_SP, bass_y)
+                c.setLineWidth(0.8)
+                c.line(MARGIN_LEFT, bass_y, MARGIN_LEFT, treble_y + 4 * LINE_SP)
+
+                c.setFont("Times-Roman", 8)
+                label = "Piano" if (page_num == 1 and sys_idx == 0) else "Pno."
+                if instrument == "conductor":
+                    label = "Orch." if (page_num == 1 and sys_idx == 0) else "Ens."
+                c.drawRightString(MARGIN_LEFT - 14, sys_y + (SYSTEM_H / 2.0) - 3, label)
+
+                draw_treble_clef(c, MARGIN_LEFT + 8, treble_y, LINE_SP)
+                draw_bass_clef(c, MARGIN_LEFT + 8, bass_y, LINE_SP)
+
+                key_w = draw_key_signature(c, key_name, MARGIN_LEFT + 28, treble_y, bass_y, LINE_SP)
+
+                meas_start_x = MARGIN_LEFT + 32 + key_w
+                if page_num == 1 and sys_idx == 0:
+                    ts_parts = time_sig.split("/")
+                    top_digit = ts_parts[0] if ts_parts else "4"
+                    bot_digit = ts_parts[1] if len(ts_parts) > 1 else "4"
+                    c.setFont("Times-Bold", 12)
+                    c.drawCentredString(meas_start_x + 6, treble_y + 2.5 * LINE_SP, top_digit)
+                    c.drawCentredString(meas_start_x + 6, treble_y + 0.5 * LINE_SP, bot_digit)
+                    c.drawCentredString(meas_start_x + 6, bass_y + 2.5 * LINE_SP, top_digit)
+                    c.drawCentredString(meas_start_x + 6, bass_y + 0.5 * LINE_SP, bot_digit)
+                    meas_start_x += 16
+
+                sec_letter = section_letters.get(cur_measure, "")
+                if sec_letter:
+                    c.setFont("Times-Bold", 9)
+                    c.rect(meas_start_x + 2, treble_y + 4 * LINE_SP + 14, 12, 11, stroke=1, fill=0)
+                    c.drawCentredString(meas_start_x + 8, treble_y + 4 * LINE_SP + 16, sec_letter)
+
+                avail_w = MARGIN_RIGHT - meas_start_x
+                bar_w = avail_w / measures_per_system
+
+                for b in range(measures_per_system):
+                    if cur_measure > total_measures:
+                        break
+
+                    m_num = cur_measure
+                    bx = meas_start_x + b * bar_w
+                    bx_end = bx + bar_w
+
+                    c.setLineWidth(0.6)
+                    if m_num == total_measures:
+                        c.line(bx_end - 3, bass_y, bx_end - 3, treble_y + 4 * LINE_SP)
+                        c.setLineWidth(1.6)
+                        c.line(bx_end, bass_y, bx_end, treble_y + 4 * LINE_SP)
+                    else:
+                        c.line(bx_end, bass_y, bx_end, treble_y + 4 * LINE_SP)
+
+                    c.setFont("Times-Italic", 7.5)
+                    c.drawString(bx + 3, treble_y + 4 * LINE_SP + 3, str(m_num))
+
+                    ch_label = chord_by_measure.get(m_num, "")
+                    if ch_label:
+                        c.setFont("Times-Bold", 9)
+                        c.drawCentredString(bx + bar_w / 2.0, treble_y + 4 * LINE_SP + 4, ch_label)
+
+                    m_notes = notes_by_measure.get(m_num, [])
+                    t_chords, b_chords = group_notes_into_chords(m_notes)
+
+                    treble_stems: list = []
+                    bass_stems: list = []
+
+                    for ch in t_chords:
+                        beat_pos = ch["beat"]
+                        nx = bx + 10 + (beat_pos / 4.0) * (bar_w - 20)
+                        sx, tip, is_up, root = draw_chord(
+                            c, nx, ch["pitches"], treble_y, treble_y + 4 * LINE_SP, LINE_SP, TREBLE_BOTTOM_STEP
+                        )
+                        treble_stems.append((sx, tip, is_up, root, beat_pos))
+
+                    for ch in b_chords:
+                        beat_pos = ch["beat"]
+                        nx = bx + 10 + (beat_pos / 4.0) * (bar_w - 20)
+                        sx, tip, is_up, root = draw_chord(
+                            c, nx, ch["pitches"], bass_y, bass_y + 4 * LINE_SP, LINE_SP, BASS_BOTTOM_STEP
+                        )
+                        bass_stems.append((sx, tip, is_up, root, beat_pos))
+
+                    draw_beams_for_measure(c, treble_stems)
+                    draw_beams_for_measure(c, bass_stems)
+
+                    cur_measure += 1
 
         c.setFont("Times-Roman", 8)
         c.drawCentredString(
@@ -580,11 +697,82 @@ def generate_sheet_music_pdf(
         c.showPage()
         page_num += 1
 
-    # Final Page: Fiche Conducteur d'Orchestre & Grille Harmonique (Lead Sheet)
-    _draw_conductor_guide_page(
-        c, title, key_name, tempo_val, time_sig, total_measures, len(notes), chord_by_measure, result_data
+    # Final Page for conductor and piano: Fiche Conducteur d'Orchestre & Grille Harmonique (Lead Sheet)
+    if instrument in ("conductor", "piano"):
+        _draw_conductor_guide_page(
+            c, title, key_name, tempo_val, time_sig, total_measures, len(notes), chord_by_measure, result_data
+        )
+        c.showPage()
+
+    c.save()
+    logger.info("Generated PDF sheet music [%s] at: %s (%d pages)", instrument, output_path, page_num)
+    return output_path
+
+
+def generate_multi_instrument_pdfs(
+    result_data: dict[str, Any],
+    output_dir: str,
+    analysis_id: str,
+    title: Optional[str] = None,
+) -> dict[str, str]:
+    """Generate separate PDF sheet music scores for all instruments plus conductor.
+
+    Returns:
+        Dict mapping instrument IDs (``conductor``, ``piano``, ``lead``, ``bass``)
+        to their respective generated PDF file paths.
+    """
+    out_p = Path(output_dir)
+    out_p.mkdir(parents=True, exist_ok=True)
+
+    base_title = title or result_data.get("audio", {}).get("filename", "")
+    if base_title:
+        base_title = os.path.splitext(os.path.basename(base_title))[0].replace("_", " ").title()
+    else:
+        base_title = "Partition MELODYX"
+
+    results: dict[str, str] = {}
+
+    # 1. Conductor
+    cond_path = str(out_p / f"{analysis_id}.pdf")
+    generate_sheet_music_pdf(
+        result_data,
+        cond_path,
+        title=f"{base_title} — Conducteur d'Orchestre",
+        instrument="conductor",
     )
-    c.showPage()
+    results["conductor"] = cond_path
+
+    # 2. Piano
+    piano_path = str(out_p / f"{analysis_id}_piano.pdf")
+    generate_sheet_music_pdf(
+        result_data,
+        piano_path,
+        title=f"{base_title} — Piano Solo",
+        instrument="piano",
+    )
+    results["piano"] = piano_path
+
+    # 3. Lead / Chant
+    lead_path = str(out_p / f"{analysis_id}_lead.pdf")
+    generate_sheet_music_pdf(
+        result_data,
+        lead_path,
+        title=f"{base_title} — Chant / Lead",
+        instrument="lead",
+    )
+    results["lead"] = lead_path
+
+    # 4. Basse
+    bass_path = str(out_p / f"{analysis_id}_bass.pdf")
+    generate_sheet_music_pdf(
+        result_data,
+        bass_path,
+        title=f"{base_title} — Basse",
+        instrument="bass",
+    )
+    results["bass"] = bass_path
+
+    return results
 
     c.save()
     logger.info("Generated PDF sheet music at: %s (%d pages)", output_path, page_num)
@@ -603,8 +791,14 @@ def _draw_conductor_guide_page(
     result_data: dict[str, Any],
 ):
     """Render a Lead Sheet and Orchestra Conductor Guide on the final page."""
-    c.setFont("Times-Bold", 17)
-    c.drawCentredString(PAGE_W / 2.0, PAGE_H - 45, f"GUIDE DU CONDUCTEUR — {title.upper()}")
+    guide_title = f"GUIDE DU CONDUCTEUR — {title.upper()}"
+    if len(guide_title) > 55:
+        c.setFont("Times-Bold", 12)
+    elif len(guide_title) > 40:
+        c.setFont("Times-Bold", 14)
+    else:
+        c.setFont("Times-Bold", 16)
+    c.drawCentredString(PAGE_W / 2.0, PAGE_H - 45, guide_title)
 
     c.setFont("Times-Italic", 10)
     c.drawCentredString(
