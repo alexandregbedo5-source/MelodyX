@@ -206,6 +206,28 @@ def run_pipeline(app: Flask, analysis_id: str) -> None:
                 analysis_id, "musicxml", musicxml_path,
                 "application/vnd.recordare.musicxml+xml", xml_size,
             )
+
+            # --- PDF Sheet Music Score ---
+            try:
+                from app.services.pdf_generator import generate_sheet_music_pdf
+                pdf_path = os.path.join(analysis_dir, f"{analysis_id}.pdf")
+                pdf_result_dict = {
+                    "audio": {"filename": original_filename},
+                    "music": {
+                        "tempo_bpm": {"value": tempo_bpm},
+                        "key": {"value": key_name},
+                        "time_signature": {"value": time_sig},
+                        "chords": chords,
+                        "measures": measures,
+                        "notes": quantized_notes,
+                    },
+                }
+                generate_sheet_music_pdf(pdf_result_dict, pdf_path)
+                pdf_size = os.path.getsize(pdf_path)
+                save_artifact(analysis_id, "pdf", pdf_path, "application/pdf", pdf_size)
+            except Exception as pdf_exc:
+                logger.warning("[%s] PDF generation warning (non-fatal): %s", analysis_id, pdf_exc)
+
             update_analysis_status(
                 analysis_id, "processing", stage="notation", progress=0.85
             )

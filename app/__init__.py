@@ -93,7 +93,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     from app.routes.analysis import analysis_bp
     from app.routes.export import export_bp
     from app.routes.playback import playback_bp
+    from app.routes.web import web_bp
 
+    app.register_blueprint(web_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(analysis_bp)
@@ -114,9 +116,23 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def _add_security_headers(response):  # type: ignore[no-untyped-def]
         """Add common security headers."""
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Cache-Control"] = "no-store"
-        response.headers["Content-Security-Policy"] = "default-src 'none'"
+        
+        # Allow frontend assets, scripts, audio streaming and fonts
+        ctype = response.headers.get("Content-Type", "")
+        if "text/html" in ctype or "javascript" in ctype or "text/css" in ctype:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com data:; "
+                "media-src 'self' blob: http: https:; "
+                "img-src 'self' data: blob:; "
+                "connect-src 'self' https://cdn.jsdelivr.net;"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = "default-src 'none'"
         return response
 
     # --- Error handlers ------------------------------------------------------

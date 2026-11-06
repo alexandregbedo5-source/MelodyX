@@ -165,10 +165,81 @@ def export_json(analysis_id: str):
 
 @export_bp.route("/analysis/<analysis_id>/pdf", methods=["GET"])
 def export_pdf(analysis_id: str):
-    """PDF export — not yet implemented (stub)."""
-    return jsonify({
-        "error": {
-            "code": "not_implemented",
-            "message": "PDF export is not yet available. Use browser print.",
-        },
-    }), 501
+    """Serve the classical sheet music PDF score for a completed analysis.
+    
+    Generates on-the-fly if not already pre-rendered in artifacts.
+    Supports ?inline=1 for in-browser rendering.
+    """
+    sid = _session_id()
+    if not sid:
+        return jsonify({"error": {"code": "not_found", "message": "Analysis not found."}}), 404
+
+    analysis, err = _get_completed_analysis(analysis_id, sid)
+    if err:
+        return err
+
+    # Check artifacts table first
+    artifact = _find_artifact_path(analysis_id, sid, "pdf")
+    if artifact is None:
+        artifact = _artifact_path_by_dir(analysis, f"{analysis_id}_partition.pdf")
+    if artifact is None:
+        artifact = _artifact_path_by_dir(analysis, f"{analysis_id}.pdf")
+
+    # If artifact does not yet exist, generate on-the-fly from analysis results
+    if artifact is None or not os.path.isfile(artifact):
+        stored_path = analysis.get("stored_path", "")
+        if not stored_path:
+            return jsonify({"error": {"code": "not_found", "message": "Score file not found."}}), 404
+        
+        analysis_dir = str(Path(stored_path).parent)
+        pdf_filename = f"{analysis_id}_partition.pdf"
+        target_path = os.path.join(analysis_dir, pdf_filename)
+
+        # Fetch result data
+        result = analysis.get("result")
+        if not result:
+            db = get_db()
+            row = db.execute(
+                "SELECT result_json FROM analysis_results WHERE analysis_id = ? ORDER BY created_at DESC LIMIT 1",
+                (analysis_id,),
+            ).fetchone()
+            if row and row["result_json"]:
+                try:
+                    result = _json.loads(row["result_json"])
+                except Exception:
+                    result = {}
+
+        if not result or not result.get("music"):
+            return jsonify({"error": {"code": "not_found", "message": "Music data not found for PDF generation."}}), 404
+
+        try:
+            from app.services.pdf_generator import generate_sheet_music_pdf
+            orig_name = analysis.get("original_filename", "")
+            title = os.path.splitext(orig_name)[0].replace("_", " ").title() if orig_name else "Partition MELODYX"
+            generate_sheet_music_pdf(result, target_path, title=title)
+            artifact = target_path
+
+            # Register in artifacts table
+            try:
+                from app.models.analysis import save_artifact
+                pdf_size = os.path.getsize(target_path)
+                save_artifact(analysis_id, "pdf", target_path, "application/pdf", pdf_size)
+            except Exception as e:
+                current_app.logger.warning("Could not register PDF artifact: %s", e)
+        except Exception as exc:
+            current_app.logger.exception("Failed to generate PDF score on-the-fly: %s", exc)
+            return jsonify({"error": {"code": "internal_error", "message": "Failed to generate PDF sheet music."}}), 500
+
+    is_inline = request.args.get("inline") == "1"
+    download_name = f"{analysis_id}_partition.pdf"
+    orig_fn = analysis.get("original_filename")
+    if orig_fn:
+        base_orig = os.path.splitext(orig_fn)[0]
+        download_name = f"{base_orig}_partition.pdf"
+
+    return send_file(
+        artifact,
+        mimetype="application/pdf",
+        as_attachment=not is_inline,
+        download_name=download_name,
+    )

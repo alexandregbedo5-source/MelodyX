@@ -226,16 +226,17 @@ def test_delete_analysis(client, app):
     assert get_resp.status_code == 404
 
 
-def test_pdf_returns_501(client, app):
-    """PDF export returns 501 Not Implemented per MVP spec."""
+def test_pdf_export_success(client, app):
+    """PDF export generates and serves a valid classical sheet music PDF."""
     session_id = "test_sess_pdf"
     client.set_cookie("melodyx_sid", session_id)
     aid = _seed_completed_analysis(app, session_id)
 
     response = client.get(f'/api/analysis/{aid}/pdf')
-    assert response.status_code == 501
-    data = json.loads(response.data)
-    assert data["error"]["code"] == "not_implemented"
+    assert response.status_code == 200
+    assert response.content_type == "application/pdf"
+    assert response.data[:5] == b"%PDF-"
+    assert len(response.data) > 1000
 
 
 def test_teacher_validation_missing_question(client, app):
