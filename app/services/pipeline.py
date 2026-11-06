@@ -60,6 +60,7 @@ def run_pipeline(app: Flask, analysis_id: str) -> None:
             return
 
         stored_path = row["stored_path"]
+        original_filename = row["original_filename"] if "original_filename" in row.keys() and row["original_filename"] else os.path.basename(stored_path)
         analysis_dir = os.path.dirname(stored_path)
         config = app.config
 

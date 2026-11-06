@@ -1,4 +1,4 @@
-"""MELODYX — Unit tests for Sheet Music Web Frontend & Demo Endpoints."""
+"""MELODYX — Unit tests for Sheet Music Web Frontend."""
 
 import pytest
 
@@ -14,34 +14,30 @@ def test_index_page_returns_200(client):
     assert "melodyx_sid" in res.headers.get("Set-Cookie", "")
 
 
-def test_demo_analysis_endpoint(client):
-    """GET /api/demo/analysis returns the sample piece analysis data."""
-    res = client.get("/api/demo/analysis")
+def test_index_no_demo_references(client):
+    """The index page must not reference any /api/demo/ endpoints."""
+    res = client.get("/")
     assert res.status_code == 200
-    data = res.get_json()
-    assert "id" in data
-    assert "result" in data
-    assert "music" in data["result"]
-    assert data["result"]["music"]["tempo_bpm"]["value"] > 0
+    assert b"/api/demo/" not in res.data
 
 
-def test_demo_score_endpoint(client):
-    """GET /api/demo/score serves the MusicXML score."""
-    res = client.get("/api/demo/score")
-    assert res.status_code == 200
-    assert b"score-partwise" in res.data or b"part" in res.data
+def test_index_sets_session_cookie(client):
+    """First visit sets melodyx_sid cookie that persists across requests."""
+    res = client.get("/")
+    cookie_header = res.headers.get("Set-Cookie", "")
+    assert "melodyx_sid=" in cookie_header
 
 
-def test_demo_pdf_endpoint(client):
-    """GET /api/demo/pdf serves the vector PDF score sheet."""
-    res = client.get("/api/demo/pdf")
-    assert res.status_code == 200
-    assert res.content_type == "application/pdf"
-    assert res.data[:5] == b"%PDF-"
+def test_demo_routes_removed(client):
+    """All /api/demo/* routes must return 404 after demo removal."""
+    for path in ["/api/demo/analysis", "/api/demo/score", "/api/demo/pdf",
+                 "/api/demo/midi", "/api/demo/audio"]:
+        res = client.get(path)
+        assert res.status_code == 404, f"{path} should return 404 but got {res.status_code}"
 
 
-def test_demo_audio_endpoint(client):
-    """GET /api/demo/audio serves the demo song audio stream."""
-    res = client.get("/api/demo/audio")
-    assert res.status_code in (200, 206)
-    assert "audio/" in res.content_type
+def test_upload_zone_present(client):
+    """The upload drop zone is present in the page."""
+    res = client.get("/")
+    assert b"dropZone" in res.data
+    assert b"handleFileUpload" in res.data

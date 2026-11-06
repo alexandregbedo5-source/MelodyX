@@ -147,13 +147,11 @@ def upload_audio():
     """
     # 1. Session ----------------------------------------------------------
     session_id = get_or_create_session()
-    is_new_session = request.cookies.get("melodyx_sid") is None
 
     # 2. File presence ----------------------------------------------------
-    if "audio" not in request.files:
+    audio_file = request.files.get("audio") or request.files.get("file")
+    if audio_file is None:
         return jsonify({"error": {"code": "invalid_request", "message": "No audio file provided."}}), 400
-
-    audio_file = request.files["audio"]
     if audio_file.filename is None or audio_file.filename.strip() == "":
         return jsonify({"error": {"code": "invalid_request", "message": "No audio file selected."}}), 400
 
@@ -259,14 +257,15 @@ def upload_audio():
     })
     resp.status_code = 202
 
-    if is_new_session:
-        resp.set_cookie(
-            "melodyx_sid",
-            session_id,
-            httponly=True,
-            samesite="Lax",
-            max_age=retention_hours * 3600,
-        )
+    # Always set the session cookie so the browser has the correct session_id
+    # (the upload may have created a new DB session if the cookie's sid was stale)
+    resp.set_cookie(
+        "melodyx_sid",
+        session_id,
+        httponly=False,
+        samesite="Lax",
+        max_age=retention_hours * 3600,
+    )
 
     return resp
 
@@ -374,14 +373,15 @@ def record_audio():
     })
     resp.status_code = 202
 
-    if is_new_session:
-        resp.set_cookie(
-            "melodyx_sid",
-            session_id,
-            httponly=True,
-            samesite="Lax",
-            max_age=retention_hours * 3600,
-        )
+    # Always set the session cookie so the browser has the correct session_id
+    # (the upload may have created a new DB session if the cookie's sid was stale)
+    resp.set_cookie(
+        "melodyx_sid",
+        session_id,
+        httponly=False,
+        samesite="Lax",
+        max_age=retention_hours * 3600,
+    )
 
     return resp
 

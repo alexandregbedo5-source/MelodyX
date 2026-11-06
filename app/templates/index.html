@@ -557,10 +557,7 @@
                 <span class="status-dot"></span>
                 <span>Moteur Musical Actif</span>
             </span>
-            <button class="btn btn-outline btn-sm" onclick="loadDemoScore()">
-                🎶 Partition Démo (Chanson)
-            </button>
-            <a href="/api/demo/pdf" class="btn btn-gold btn-sm" id="btnDownloadPdfHeader" target="_blank">
+            <a href="#" class="btn btn-gold btn-sm" id="btnDownloadPdfHeader" target="_blank" style="pointer-events:none;opacity:0.5;">
                 📄 Télécharger Partition PDF
             </a>
         </div>
@@ -665,13 +662,13 @@
                     <button class="btn btn-outline btn-sm" onclick="zoomScore(-0.1)" title="Zoom arrière">🔍 -</button>
                     <button class="btn btn-outline btn-sm" onclick="resetZoomScore()" title="Réinitialiser zoom">100%</button>
                     <button class="btn btn-outline btn-sm" onclick="window.print()" title="Imprimer la partition">🖨️ Imprimer</button>
-                    <a href="/api/demo/pdf" id="btnDownloadPdf" class="btn btn-gold btn-sm" download>
+                    <a href="#" id="btnDownloadPdf" class="btn btn-gold btn-sm" style="pointer-events:none;opacity:0.5;">
                         📄 Télécharger PDF
                     </a>
-                    <a href="/api/demo/midi" id="btnDownloadMidi" class="btn btn-outline btn-sm" download>
+                    <a href="#" id="btnDownloadMidi" class="btn btn-outline btn-sm" style="pointer-events:none;opacity:0.5;">
                         🎹 MIDI
                     </a>
-                    <a href="/api/demo/score" id="btnDownloadXml" class="btn btn-outline btn-sm" download>
+                    <a href="#" id="btnDownloadXml" class="btn btn-outline btn-sm" style="pointer-events:none;opacity:0.5;">
                         🎼 MusicXML
                     </a>
                 </div>
@@ -714,7 +711,7 @@
     </main>
 
     <!-- Hidden HTML5 Audio Element -->
-    <audio id="audioPlayer" src="/api/demo/audio" preload="auto"></audio>
+    <audio id="audioPlayer" src="" preload="auto"></audio>
 
     <script>
         // State variables
@@ -880,15 +877,17 @@
 
         // Load complete analysis data
         async function loadAnalysis(aid) {
+            if (!aid) return;  // No analysis to load
             try {
-                let url = aid === "{{ demo_analysis_id }}" ? "/api/demo/analysis" : `/api/analysis/${aid}`;
+                const url = `/api/analysis/${aid}`;
                 const resp = await fetch(url);
                 if (!resp.ok) throw new Error("Could not load analysis JSON");
                 analysisData = await resp.json();
+                currentAnalysisId = aid;
 
                 const m = analysisData.result ? analysisData.result.music : {};
-                const tempo = m.tempo_bpm ? (m.tempo_bpm.value || m.tempo_bpm) : 129;
-                const key = m.key ? (m.key.value || m.key) : "E major";
+                const tempo = m.tempo_bpm ? (m.tempo_bpm.value || m.tempo_bpm) : 120;
+                const key = m.key ? (m.key.value || m.key) : "—";
                 const timeSig = m.time_signature ? (m.time_signature.value || m.time_signature) : "4/4";
                 const measures = m.measures || [];
                 const chords = m.chords || [];
@@ -897,28 +896,29 @@
                 document.getElementById("valKey").textContent = key;
                 document.getElementById("valTempo").textContent = `${Math.round(tempo)} BPM`;
                 document.getElementById("valTimeSig").textContent = timeSig;
-                document.getElementById("valMeasures").textContent = measures.length || 104;
+                document.getElementById("valMeasures").textContent = measures.length || "—";
 
                 const origFn = analysisData.original_filename || "Transcription pour Piano & Ensemble";
                 const cleanTitle = origFn.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
                 document.getElementById("displayTitle").textContent = cleanTitle;
                 document.getElementById("paperTitle").textContent = cleanTitle;
-                document.getElementById("displaySubtitle").textContent = `Concert Score • ${key} • Allegro moderato ♩ = ${Math.round(tempo)}`;
+                document.getElementById("displaySubtitle").textContent = `Concert Score • ${key} • ♩ = ${Math.round(tempo)}`;
 
-                // Update download buttons
-                if (aid === "{{ demo_analysis_id }}") {
-                    document.getElementById("btnDownloadPdf").href = "/api/demo/pdf";
-                    document.getElementById("btnDownloadPdfHeader").href = "/api/demo/pdf";
-                    document.getElementById("btnDownloadMidi").href = "/api/demo/midi";
-                    document.getElementById("btnDownloadXml").href = "/api/demo/score";
-                    audio.src = "/api/demo/audio";
-                } else {
-                    document.getElementById("btnDownloadPdf").href = `/api/analysis/${aid}/pdf`;
-                    document.getElementById("btnDownloadPdfHeader").href = `/api/analysis/${aid}/pdf`;
-                    document.getElementById("btnDownloadMidi").href = `/api/analysis/${aid}/midi`;
-                    document.getElementById("btnDownloadXml").href = `/api/analysis/${aid}/score`;
-                    audio.src = `/api/analysis/${aid}/audio`;
-                }
+                // Update download buttons — always use standard API routes
+                const btnPdf = document.getElementById("btnDownloadPdf");
+                const btnPdfH = document.getElementById("btnDownloadPdfHeader");
+                const btnMidi = document.getElementById("btnDownloadMidi");
+                const btnXml = document.getElementById("btnDownloadXml");
+
+                btnPdf.href = `/api/analysis/${aid}/pdf`;
+                btnPdf.setAttribute("download", ""); btnPdf.style.pointerEvents = "auto"; btnPdf.style.opacity = "1";
+                btnPdfH.href = `/api/analysis/${aid}/pdf`;
+                btnPdfH.style.pointerEvents = "auto"; btnPdfH.style.opacity = "1";
+                btnMidi.href = `/api/analysis/${aid}/midi`;
+                btnMidi.setAttribute("download", ""); btnMidi.style.pointerEvents = "auto"; btnMidi.style.opacity = "1";
+                btnXml.href = `/api/analysis/${aid}/score`;
+                btnXml.setAttribute("download", ""); btnXml.style.pointerEvents = "auto"; btnXml.style.opacity = "1";
+                audio.src = `/api/analysis/${aid}/audio`;
 
                 // Render chord pills
                 const chordList = document.getElementById("chordList");
@@ -939,17 +939,12 @@
                 });
 
                 // Load score MusicXML
-                const scoreUrl = aid === "{{ demo_analysis_id }}" ? "/api/demo/score" : `/api/analysis/${aid}/score`;
+                const scoreUrl = `/api/analysis/${aid}/score`;
                 await loadMusicXML(scoreUrl);
 
             } catch (err) {
                 console.error("Error loading analysis:", err);
             }
-        }
-
-        // Demo Score Quick-loader
-        function loadDemoScore() {
-            loadAnalysis("{{ demo_analysis_id }}");
         }
 
         // File upload handling
@@ -1060,7 +1055,10 @@
         // Initial setup on load
         window.addEventListener("DOMContentLoaded", () => {
             initOSMD();
-            loadAnalysis("{{ default_analysis_id }}");
+            const defaultAid = "{{ default_analysis_id }}";
+            if (defaultAid) {
+                loadAnalysis(defaultAid);
+            }
         });
     </script>
 </body>
