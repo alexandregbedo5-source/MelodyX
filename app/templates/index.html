@@ -696,15 +696,21 @@
             <!-- Sheet Music Engraved Paper Canvas -->
             <div class="sheet-paper" id="paperContainer">
                 <div class="score-paper-header">
-                    <div class="paper-title" id="paperTitle">Transcription pour Piano & Ensemble</div>
+                    <div class="paper-title" id="paperTitle">Partition Musicale</div>
                     <div class="paper-meta">
-                        <span>Allegro moderato • ♩ = 129</span>
+                        <span id="paperMetaTempo">En attente d'import audio...</span>
                         <span>Édition Conforme Opéra & Orchestre</span>
-                        <span>Tonalité: Mi Majeur (4 dièses)</span>
+                        <span id="paperMetaKey">—</span>
                     </div>
                 </div>
                 <!-- OpenSheetMusicDisplay container -->
-                <div id="osmdCanvas"></div>
+                <div id="osmdCanvas">
+                    <div id="osmdPlaceholder" style="text-align: center; padding: 140px 20px; color: #888;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">🎼</div>
+                        <div style="font-size: 18px; font-weight: 600; color: #444; margin-bottom: 8px;">Aucune partition chargée</div>
+                        <div style="font-size: 14px; color: #777;">Glissez-déposez un morceau audio dans la barre latérale pour lancer la transcription et afficher la partition ici.</div>
+                    </div>
+                </div>
             </div>
 
         </section>
@@ -760,10 +766,15 @@
         // Load MusicXML into OSMD
         async function loadMusicXML(url) {
             try {
+                const placeholder = document.getElementById("osmdPlaceholder");
+                if (placeholder) placeholder.style.display = "none";
+
                 if (!osmd) initOSMD();
                 const resp = await fetch(url);
                 if (!resp.ok) throw new Error("Could not fetch score MusicXML");
-                const xmlText = await resp.text();
+                let xmlText = await resp.text();
+                // Strip rogue standalone harmony elements to ensure 100% robust OSMD rendering
+                xmlText = xmlText.replace(/<harmony[\s\S]*?<\/harmony>/gi, "");
                 await osmd.load(xmlText);
                 osmd.zoom = currentZoom;
                 osmd.render();
@@ -885,7 +896,8 @@
                 analysisData = await resp.json();
                 currentAnalysisId = aid;
 
-                const m = analysisData.result ? analysisData.result.music : {};
+                // Handle both analysisData.music and analysisData.result.music
+                const m = analysisData.music || (analysisData.result ? analysisData.result.music : {});
                 const tempo = m.tempo_bpm ? (m.tempo_bpm.value || m.tempo_bpm) : 120;
                 const key = m.key ? (m.key.value || m.key) : "—";
                 const timeSig = m.time_signature ? (m.time_signature.value || m.time_signature) : "4/4";
@@ -898,11 +910,16 @@
                 document.getElementById("valTimeSig").textContent = timeSig;
                 document.getElementById("valMeasures").textContent = measures.length || "—";
 
-                const origFn = analysisData.original_filename || "Transcription pour Piano & Ensemble";
+                const origFn = analysisData.original_filename || (analysisData.audio ? analysisData.audio.filename : "") || "Transcription pour Piano & Ensemble";
                 const cleanTitle = origFn.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
                 document.getElementById("displayTitle").textContent = cleanTitle;
                 document.getElementById("paperTitle").textContent = cleanTitle;
                 document.getElementById("displaySubtitle").textContent = `Concert Score • ${key} • ♩ = ${Math.round(tempo)}`;
+
+                const elPaperTempo = document.getElementById("paperMetaTempo");
+                if (elPaperTempo) elPaperTempo.textContent = `Tempo: ${Math.round(tempo)} BPM • Métrique: ${timeSig}`;
+                const elPaperKey = document.getElementById("paperMetaKey");
+                if (elPaperKey) elPaperKey.textContent = `Tonalité: ${key}`;
 
                 // Update download buttons — always use standard API routes
                 const btnPdf = document.getElementById("btnDownloadPdf");

@@ -40,6 +40,7 @@ def _build_full_response(analysis: dict) -> dict:
 
     payload: dict[str, Any] = {
         "analysis_id": analysis["id"],
+        "original_filename": analysis.get("original_filename"),
         "status": status,
         "stage": analysis.get("stage"),
         "progress": analysis.get("progress", 0.0),

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>OSMD Test</title>
+    <script src="../app/static/js/opensheetmusicdisplay.min.js"></script>
+</head>
+<body>
+    <div id="osmdCanvas" style="width: 800px; height: 600px;"></div>
+    <div id="output">STARTING</div>
+    <script>
+        async function run() {
+            const out = document.getElementById("output");
+            try {
+                out.textContent = "OSMD TYPE: " + typeof opensheetmusicdisplay;
+                const container = document.getElementById("osmdCanvas");
+                const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(container, {
+                    autoResize: false,
+                    backend: "svg"
+                });
+                out.textContent += " | INSTANTIATED";
+                const resp = await fetch("http://127.0.0.1:5000/api/analysis/an_be261202d301/score");
+                out.textContent += " | FETCH STATUS: " + resp.status;
+                const xmlText = await resp.text();
+                out.textContent += " | XML LEN: " + xmlText.length;
+                await osmd.load(xmlText);
+                out.textContent += " | LOADED";
+                osmd.render();
+                out.textContent += " | RENDERED! SVG COUNT: " + container.querySelectorAll("svg").length;
+            } catch(e) {
+                out.textContent += " | ERROR: " + e.name + ": " + e.message + " AT " + e.stack;
+            }
+        }
+        window.addEventListener("DOMContentLoaded", run);
+    </script>
+</body>
+</html>

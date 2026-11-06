@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><script src="../app/static/js/opensheetmusicdisplay.min.js"></script></head>
+<body>
+    <pre id="stack"></pre>
+    <div id="osmdCanvas"></div>
+    <script>
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const container = document.getElementById('osmdCanvas');
+                const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(container, {
+                    autoResize: false, backend: 'svg'
+                });
+                const resp = await fetch('http://127.0.0.1:5000/api/analysis/an_be261202d301/score');
+                const xml = await resp.text();
+                await osmd.load(xml);
+                osmd.render();
+                document.getElementById('stack').textContent = 'SUCCESS';
+            } catch(e) {
+                document.getElementById('stack').textContent = e.stack || e.message;
+            }
+        });
+    </script>
+</body>
+</html>

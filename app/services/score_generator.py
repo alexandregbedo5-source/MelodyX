@@ -126,21 +126,9 @@ def generate_musicxml(
         else:
             treble_part.insert(offset_ql, n)
 
-    # ---- Add chord symbols (confidence > 0.6) -----------------------------
-    for ch in chords:
-        if ch.get("confidence", 0) <= 0.6:
-            continue
-        label: str = ch["label"]
-        ch_start: float = ch["start"]
-
-        seconds_per_beat = 60.0 / tempo_bpm
-        offset_ql = round(((ch_start / seconds_per_beat) * beat_duration_ql) * 4.0) / 4.0
-
-        try:
-            cs = harmony.ChordSymbol(label)
-            treble_part.insert(offset_ql, cs)
-        except Exception:
-            logger.debug("Could not parse chord symbol '%s', skipping", label)
+    # ---- Chord symbols are rendered in the conductor lead sheet, UI chord bar, and PDF ----
+    # Note: Inserting free-floating ChordSymbol objects into unmeasured parts produces
+    # orphan <harmony> nodes without corresponding note entries, causing OSMD rendering crashes.
 
     # ---- Ensure parts have content and quantize to expressible rhythms ----
     if len(treble_part.notes) == 0:
