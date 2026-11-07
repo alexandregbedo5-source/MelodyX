@@ -16,8 +16,10 @@ from app.models.analysis import (
     create_analysis,
     create_session,
     get_or_create_session,
+    refund_transcription,
     update_analysis_status,
 )
+from app.models.policies import has_policy_acceptance
 
 upload_bp = Blueprint("upload", __name__, url_prefix="/api/audio")
 
@@ -71,6 +73,25 @@ def _sha256(filepath: str) -> str:
                 break
             h.update(chunk)
     return h.hexdigest()
+
+
+def _policy_consent_required(session_id: str):
+    response = jsonify({
+        "error": {
+            "code": "policy_consent_required",
+            "message": "Lis et accepte les politiques de confidentialité, de droit d’auteur et de non-plagiat avant l’import.",
+            "policies_url": "/policies/privacy",
+        },
+    })
+    response.status_code = 428
+    response.set_cookie(
+        "melodyx_sid",
+        session_id,
+        httponly=False,
+        samesite="Lax",
+        max_age=86400 * 30,
+    )
+    return response
 
 
 def _ffprobe_info(filepath: str) -> Tuple[float, Optional[int], Optional[int]]:
@@ -147,6 +168,8 @@ def upload_audio():
     """
     # 1. Session ----------------------------------------------------------
     session_id = get_or_create_session()
+    if not has_policy_acceptance(session_id):
+        return _policy_consent_required(session_id)
 
     # 2. File presence ----------------------------------------------------
     audio_file = (
@@ -233,7 +256,20 @@ def upload_audio():
         stored_path=stored_path,
         sha256=file_hash,
         expires_at=expires_at,
+        analysis_id=analysis_id,
+        enforce_quota=True,
     )
+    if analysis_id is None:
+        _cleanup_dir(analysis_dir)
+        return jsonify({
+            "error": {
+                "code": "quota_exceeded",
+                "message": "Les 10 transcriptions offertes ont été utilisées. Choisis une offre pour continuer.",
+                "used": 10,
+                "limit": 10,
+                "pricing_url": "/pricing?reason=quota",
+            },
+        }), 402
 
     # Update with audio metadata
     update_analysis_status(
@@ -252,6 +288,13 @@ def upload_audio():
         current_app.logger.exception(
             "Failed to submit pipeline task for %s", analysis_id
         )
+        update_analysis_status(
+            analysis_id, "failed", error_code="pipeline_unavailable",
+            error_message="Le moteur de transcription n’a pas pu démarrer. Réessaie dans un instant.",
+            completed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        refund_transcription(session_id)
+        _cleanup_dir(analysis_dir)
 
     # 12. Response --------------------------------------------------------
     resp = jsonify({
@@ -282,6 +325,8 @@ def record_audio():
     """
     session_id = get_or_create_session()
     is_new_session = request.cookies.get("melodyx_sid") is None
+    if not has_policy_acceptance(session_id):
+        return _policy_consent_required(session_id)
 
     # Audio can be passed via form-data 'audio', 'blob', or raw data
     audio_file = None
@@ -355,7 +400,20 @@ def record_audio():
         stored_path=stored_path,
         sha256=file_hash,
         expires_at=expires_at,
+        analysis_id=analysis_id,
+        enforce_quota=True,
     )
+    if analysis_id is None:
+        _cleanup_dir(analysis_dir)
+        return jsonify({
+            "error": {
+                "code": "quota_exceeded",
+                "message": "Les 10 transcriptions offertes ont été utilisées. Choisis une offre pour continuer.",
+                "used": 10,
+                "limit": 10,
+                "pricing_url": "/pricing?reason=quota",
+            },
+        }), 402
 
     update_analysis_status(
         analysis_id, "queued",
@@ -369,6 +427,13 @@ def record_audio():
         submit_pipeline(current_app._get_current_object(), analysis_id)
     except Exception:
         current_app.logger.exception("Failed to submit pipeline task for %s", analysis_id)
+        update_analysis_status(
+            analysis_id, "failed", error_code="pipeline_unavailable",
+            error_message="Le moteur de transcription n’a pas pu démarrer. Réessaie dans un instant.",
+            completed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        refund_transcription(session_id)
+        _cleanup_dir(analysis_dir)
 
     resp = jsonify({
         "analysis_id": analysis_id,

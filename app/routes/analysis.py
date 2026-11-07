@@ -262,6 +262,16 @@ def ask_teacher_route(analysis_id: str):
             },
         }), 400
 
+    from app.models.policies import has_gemini_opt_in
+    if not has_gemini_opt_in(sid):
+        return jsonify({
+            "error": {
+                "code": "gemini_consent_required",
+                "message": "Active l’autorisation facultative Gemini avant de partager des données musicales avec le service IA.",
+                "policies_url": "/policies/privacy",
+            },
+        }), 403
+
     # --- AI call quota ---------------------------------------------------
     max_calls: int = int(current_app.config.get("MAX_AI_CALLS_PER_SESSION", 20))
     db = get_db()

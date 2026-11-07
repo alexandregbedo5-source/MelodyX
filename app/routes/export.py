@@ -2,13 +2,26 @@
 
 import json as _json
 import os
+import tempfile
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
 from app.extensions import get_db
-from app.models.analysis import get_analysis, get_artifacts
+from app.models.analysis import (
+    get_analysis,
+    get_artifacts,
+    get_score_edit,
+    save_score_edit,
+)
+from app.services.score_editing import (
+    SCORE_INSTRUMENTS,
+    musicxml_to_analysis_result,
+    validate_musicxml,
+    write_musicxml_midi,
+)
 
 export_bp = Blueprint("export", __name__, url_prefix="/api")
 
@@ -73,7 +86,7 @@ def _artifact_path_by_dir(analysis: dict, filename: str) -> Optional[str]:
 # Routes
 # ---------------------------------------------------------------------------
 
-@export_bp.route("/analysis/<analysis_id>/score", methods=["GET"])
+@export_bp.route("/analysis/<analysis_id>/score", methods=["GET", "PUT"])
 def export_score(analysis_id: str):
     """Serve the MusicXML score file for a completed analysis.
     
@@ -88,8 +101,60 @@ def export_score(analysis_id: str):
         return err
 
     instrument = request.args.get("instrument", "conductor").lower()
-    if instrument not in ("conductor", "piano", "lead", "bass"):
+    if instrument not in SCORE_INSTRUMENTS:
+        if request.method == "PUT":
+            return jsonify({"error": {"code": "invalid_request", "message": "Instrument de partition invalide."}}), 400
         instrument = "conductor"
+
+    if request.method == "PUT":
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": {"code": "invalid_request", "message": "Un objet JSON est requis."}}), 400
+
+        expected_version = body.get("version")
+        if isinstance(expected_version, bool) or not isinstance(expected_version, int) or expected_version < 0:
+            return jsonify({"error": {"code": "invalid_request", "message": "La version de la partition est invalide."}}), 400
+
+        musicxml = body.get("musicxml")
+        valid, validation_message = validate_musicxml(musicxml)
+        if not valid:
+            return jsonify({"error": {"code": "invalid_musicxml", "message": validation_message}}), 400
+
+        saved, current_version, updated_at = save_score_edit(
+            analysis_id, instrument, musicxml, expected_version
+        )
+        if not saved:
+            return jsonify({
+                "error": {
+                    "code": "score_conflict",
+                    "message": "Cette partition a été modifiée ailleurs. Recharge-la avant de continuer.",
+                    "current_version": current_version,
+                }
+            }), 409
+
+        return jsonify({
+            "analysis_id": analysis_id,
+            "instrument": instrument,
+            "version": current_version,
+            "updated_at": updated_at,
+            "saved": True,
+        }), 200
+
+    saved_edit = get_score_edit(analysis_id, instrument)
+    if saved_edit:
+        orig_fn = analysis.get("original_filename")
+        download_name = f"{analysis_id}_{instrument}.musicxml"
+        if orig_fn:
+            download_name = f"{os.path.splitext(orig_fn)[0]}_{instrument}.musicxml"
+        response = send_file(
+            BytesIO(saved_edit["musicxml"].encode("utf-8")),
+            mimetype="application/vnd.recordare.musicxml+xml",
+            as_attachment=request.args.get("download") == "1",
+            download_name=download_name,
+        )
+        response.headers["X-Score-Edit-Version"] = str(saved_edit["version"])
+        response.headers["X-Score-Edited"] = "true"
+        return response
 
     stored_path = analysis.get("stored_path", "")
     analysis_dir = str(Path(stored_path).parent) if stored_path else ""
@@ -154,19 +219,21 @@ def export_score(analysis_id: str):
         if artifact is None:
             return jsonify({"error": {"code": "not_found", "message": "Score file not found."}}), 404
 
-    is_download = request.args.get("download") == "1"
     download_name = f"{analysis_id}_{instrument}.musicxml"
     orig_fn = analysis.get("original_filename")
     if orig_fn:
         base_orig = os.path.splitext(orig_fn)[0]
         download_name = f"{base_orig}_{instrument}.musicxml"
 
-    return send_file(
+    response = send_file(
         artifact,
         mimetype="application/vnd.recordare.musicxml+xml",
-        as_attachment=is_download,
+        as_attachment=request.args.get("download") == "1",
         download_name=download_name,
     )
+    response.headers["X-Score-Edit-Version"] = "0"
+    response.headers["X-Score-Edited"] = "false"
+    return response
 
 
 @export_bp.route("/analysis/<analysis_id>/midi", methods=["GET"])
@@ -186,6 +253,29 @@ def export_midi(analysis_id: str):
     instrument = request.args.get("instrument", "conductor").lower()
     if instrument not in ("conductor", "piano", "lead", "bass"):
         instrument = "conductor"
+
+    saved_edit = get_score_edit(analysis_id, instrument)
+    if saved_edit:
+        try:
+            with tempfile.TemporaryDirectory(prefix="melodyx-score-midi-") as temp_dir:
+                temp_path = os.path.join(temp_dir, f"{instrument}.mid")
+                write_musicxml_midi(saved_edit["musicxml"], temp_path)
+                with open(temp_path, "rb") as midi_file:
+                    midi_data = midi_file.read()
+        except Exception:
+            current_app.logger.exception("Failed to export edited MIDI for %s/%s", analysis_id, instrument)
+            return jsonify({"error": {"code": "internal_error", "message": "Impossible de générer le MIDI de la partition modifiée."}}), 500
+
+        orig_fn = analysis.get("original_filename")
+        download_name = f"{analysis_id}_{instrument}.mid"
+        if orig_fn:
+            download_name = f"{os.path.splitext(orig_fn)[0]}_{instrument}.mid"
+        return send_file(
+            BytesIO(midi_data),
+            mimetype="audio/midi",
+            as_attachment=True,
+            download_name=download_name,
+        )
 
     stored_path = analysis.get("stored_path", "")
     analysis_dir = str(Path(stored_path).parent) if stored_path else ""
@@ -308,6 +398,36 @@ def export_pdf(analysis_id: str):
     instrument = request.args.get("instrument", "conductor").lower()
     if instrument not in ("conductor", "piano", "lead", "bass"):
         instrument = "conductor"
+
+    saved_edit = get_score_edit(analysis_id, instrument)
+    if saved_edit:
+        try:
+            with tempfile.TemporaryDirectory(prefix="melodyx-score-pdf-") as temp_dir:
+                target_path = os.path.join(temp_dir, f"{instrument}.pdf")
+                edited_result = musicxml_to_analysis_result(
+                    saved_edit["musicxml"], analysis.get("result"), instrument
+                )
+                from app.services.pdf_generator import generate_sheet_music_pdf
+                orig_name = analysis.get("original_filename", "")
+                title = os.path.splitext(orig_name)[0].replace("_", " ").title() if orig_name else "Partition MELODYX"
+                generate_sheet_music_pdf(edited_result, target_path, title=title, instrument=instrument)
+                with open(target_path, "rb") as pdf_file:
+                    pdf_data = pdf_file.read()
+        except Exception:
+            current_app.logger.exception("Failed to export edited PDF for %s/%s", analysis_id, instrument)
+            return jsonify({"error": {"code": "internal_error", "message": "Impossible de générer le PDF de la partition modifiée."}}), 500
+
+        is_inline = request.args.get("inline") == "1"
+        orig_fn = analysis.get("original_filename")
+        download_name = f"{analysis_id}_{instrument}.pdf"
+        if orig_fn:
+            download_name = f"{os.path.splitext(orig_fn)[0]}_{instrument}.pdf"
+        return send_file(
+            BytesIO(pdf_data),
+            mimetype="application/pdf",
+            as_attachment=not is_inline,
+            download_name=download_name,
+        )
 
     stored_path = analysis.get("stored_path", "")
     analysis_dir = str(Path(stored_path).parent) if stored_path else ""

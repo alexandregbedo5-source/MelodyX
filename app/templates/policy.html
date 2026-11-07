@@ -1,0 +1,57 @@
+{% extends "site_base.html" %}
+{% block title %}{{ policy.title }} — MELODYX{% endblock %}
+{% block content %}
+<article class="page-shell policy-page">
+    <a class="policy-back-link" href="{{ url_for('web.studio') }}">Retour au studio</a>
+    <div class="policy-eyebrow">{{ policy.eyebrow }}</div>
+    <div class="policy-title-row">
+        <div>
+            <h1>{{ policy.title }}</h1>
+            <p class="policy-lead">{{ policy.lead }}</p>
+        </div>
+        <span class="policy-version">Version {{ policy.version }} · 7 novembre 2026</span>
+    </div>
+
+    {% if policy.id == 'privacy' %}
+    <aside class="policy-contact-note">
+        <svg class="icon" aria-hidden="true"><use href="#mx-info"></use></svg>
+        {% if policy.contact_email %}
+        <span>Contact données personnelles : <a href="mailto:{{ policy.contact_email }}">{{ policy.contact_email }}</a></span>
+        {% else %}
+        <span>Contact du responsable à configurer : l’adresse de confidentialité n’est pas encore renseignée dans cette démonstration locale.</span>
+        {% endif %}
+    </aside>
+    {% endif %}
+
+    <div class="policy-content">
+        {% for section in policy.sections %}
+        <section class="policy-section">
+            <h2>{{ section.heading }}</h2>
+            {% for paragraph in section.get('paragraphs', []) %}<p>{{ paragraph }}</p>{% endfor %}
+            {% if section.get('bullets') %}
+            <ul>{% for bullet in section.bullets %}<li>{{ bullet }}</li>{% endfor %}</ul>
+            {% endif %}
+        </section>
+        {% endfor %}
+    </div>
+
+    {% if policy.references %}
+    <section class="policy-references" aria-label="Textes et conditions de référence">
+        <h2>Pour aller plus loin</h2>
+        <ul>{% for reference in policy.references %}<li><a href="{{ reference.url }}" target="_blank" rel="noopener noreferrer">{{ reference.label }} <svg class="icon" aria-hidden="true"><use href="#mx-arrow-up-right"></use></svg></a></li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    <nav class="policy-related-links" aria-label="Autres politiques MELODYX">
+        <span>Autres documents :</span>
+        <a href="{{ url_for('web.policy', policy_id='privacy') }}">Confidentialité</a>
+        <a href="{{ url_for('web.policy', policy_id='copyright') }}">Droit d’auteur</a>
+        <a href="{{ url_for('web.policy', policy_id='plagiarism') }}">Non-plagiat</a>
+    </nav>
+
+    <div class="policy-actions">
+        <a class="button button-primary" href="{{ url_for('web.studio') }}">Retour à l’import <svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg></a>
+        {% if policy.id != 'privacy' %}<a class="button button-quiet" href="{{ url_for('web.policy', policy_id='privacy') }}">Lire la confidentialité</a>{% endif %}
+    </div>
+</article>
+{% endblock %}

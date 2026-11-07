@@ -1,43 +1,55 @@
-"""MELODYX — Unit tests for Sheet Music Web Frontend."""
-
-import pytest
+"""Tests for MELODYX public pages and sheet music studio."""
 
 
-def test_index_page_returns_200(client):
-    """GET / serves the interactive sheet music studio interface."""
-    res = client.get("/")
-    assert res.status_code == 200
-    assert "text/html" in res.content_type
-    assert b"MELODYX" in res.data
-    assert b"OpenSheetMusicDisplay" in res.data
-    # Check that session cookie was initialized
-    assert "melodyx_sid" in res.headers.get("Set-Cookie", "")
+def test_home_page_returns_marketing_home(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.content_type
+    assert b"MELODYX" in response.data
+    assert b"Le son devient" in response.data
+    assert b"10 transcriptions offertes" in response.data
+    assert b"melodyx-logo.jpeg" in response.data
+    assert "melodyx_sid" in response.headers.get("Set-Cookie", "")
 
 
-def test_index_no_demo_references(client):
-    """The index page must not reference any /api/demo/ endpoints."""
-    res = client.get("/")
-    assert res.status_code == 200
-    assert b"/api/demo/" not in res.data
+def test_public_pages_are_available(client):
+    for path in ("/studio", "/library", "/pricing", "/checkout/essentiel"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert b"MELODYX" in response.data
 
 
-def test_index_sets_session_cookie(client):
-    """First visit sets melodyx_sid cookie that persists across requests."""
-    res = client.get("/")
-    cookie_header = res.headers.get("Set-Cookie", "")
-    assert "melodyx_sid=" in cookie_header
+def test_studio_has_upload_and_final_score_editor(client):
+    response = client.get("/studio")
+    assert response.status_code == 200
+    assert b"dropZone" in response.data
+    assert b"handleFileUpload" in response.data
+    assert b"scoreEditor" in response.data
+    assert b"OpenSheetMusicDisplay" in response.data
+    assert b"policyConsentCard" in response.data
+    assert b"disabled" in response.data
+    assert b"Lire la politique de confidentialit" in response.data
+
+
+def test_policy_documents_are_readable(client):
+    for path, text in (
+        ("/policies/privacy", "Politique de confidentialité"),
+        ("/policies/copyright", "Politique de respect du droit d’auteur"),
+        ("/policies/plagiarism", "Politique de non-plagiat"),
+    ):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert text.encode("utf-8") in response.data
+
+
+def test_no_demo_references(client):
+    response = client.get("/studio")
+    assert response.status_code == 200
+    assert b"/api/demo/" not in response.data
 
 
 def test_demo_routes_removed(client):
-    """All /api/demo/* routes must return 404 after demo removal."""
     for path in ["/api/demo/analysis", "/api/demo/score", "/api/demo/pdf",
                  "/api/demo/midi", "/api/demo/audio"]:
-        res = client.get(path)
-        assert res.status_code == 404, f"{path} should return 404 but got {res.status_code}"
-
-
-def test_upload_zone_present(client):
-    """The upload drop zone is present in the page."""
-    res = client.get("/")
-    assert b"dropZone" in res.data
-    assert b"handleFileUpload" in res.data
+        response = client.get(path)
+        assert response.status_code == 404, f"{path} should return 404 but got {response.status_code}"

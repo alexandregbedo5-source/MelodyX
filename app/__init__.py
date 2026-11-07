@@ -30,8 +30,12 @@ def _start_purge_scheduler(app: Flask, interval_seconds: int = 3600) -> None:
             try:
                 with app.app_context():
                     count = purge_expired_analyses()
+                    from app.models.policies import purge_expired_policy_consents
+                    expired_consents = purge_expired_policy_consents()
                     if count:
                         logger.info("Purged %d expired analyses.", count)
+                    if expired_consents:
+                        logger.info("Purged %d expired policy receipts.", expired_consents)
             except Exception:
                 logger.exception("Error during purge cycle.")
 
@@ -94,6 +98,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     from app.routes.export import export_bp
     from app.routes.playback import playback_bp
     from app.routes.web import web_bp
+    from app.routes.billing import billing_bp
+    from app.routes.policies import policies_api_bp
 
     app.register_blueprint(web_bp)
     app.register_blueprint(health_bp)
@@ -101,6 +107,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app.register_blueprint(analysis_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(playback_bp)
+    app.register_blueprint(billing_bp)
+    app.register_blueprint(policies_api_bp)
 
     # --- After-request hooks -------------------------------------------------
 

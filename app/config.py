@@ -37,11 +37,14 @@ class Config:
     # --- Gemini AI ---
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-    GEMINI_TIMEOUT: int = 25
-    GEMINI_MAX_RETRIES: int = 2
+    # AI interpretation is optional; keep it from holding the audio worker.
+    GEMINI_TIMEOUT: int = 10
+    GEMINI_MAX_RETRIES: int = 0
 
     # --- Retention ---
     FILE_RETENTION_HOURS: int = int(os.getenv("FILE_RETENTION_HOURS", "24"))
+    # Published on the privacy notice; intentionally blank until configured.
+    PRIVACY_CONTACT_EMAIL: str = os.getenv("PRIVACY_CONTACT_EMAIL", "").strip()
 
     # --- Rate limiting ---
     MAX_AI_CALLS_PER_SESSION: int = 20

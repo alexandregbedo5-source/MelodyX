@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MELODYX — Studio de Partitions d'Opéra & Direction d'Orchestre</title>
+    <title>Studio de partitions — MELODYX</title>
     <!-- OpenSheetMusicDisplay (Local first, CDN fallback) -->
     <script src="/static/js/opensheetmusicdisplay.min.js"></script>
     <script>
@@ -384,7 +384,65 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
         }
+
+        .score-editor {
+            background: var(--bg-card);
+            border: 1px solid var(--gold-dark);
+            border-radius: 10px;
+            padding: 16px;
+            color: var(--text-primary);
+        }
+
+        .score-editor[hidden] { display: none !important; }
+        #btnToggleScoreEditor[hidden] { display: none !important; }
+        .score-editor-header,
+        .score-editor-actions,
+        .score-editor-fields {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .score-editor-header { justify-content: space-between; margin-bottom: 12px; }
+        .score-editor-title { font-weight: 700; color: var(--gold-light); }
+        .score-editor-status { font-size: 12px; color: var(--text-secondary); }
+        .score-editor-fields { align-items: end; margin-bottom: 12px; }
+        .score-editor-field { display: grid; gap: 5px; min-width: 105px; }
+        .score-editor-field label { font-size: 11px; color: var(--text-secondary); }
+        .score-editor-field select {
+            min-height: 36px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            padding: 6px 8px;
+        }
+        .score-editor-actions { margin-bottom: 12px; }
+        .score-event-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+            gap: 7px;
+            max-height: 230px;
+            overflow: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+        }
+        .score-event {
+            text-align: left;
+            border: 1px solid var(--border-color);
+            border-radius: 7px;
+            background: #111c30;
+            color: var(--text-primary);
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+        .score-event:hover, .score-event.selected {
+            border-color: var(--gold-light);
+            background: #2b2630;
+        }
+        .score-editor-help { font-size: 11px; color: var(--text-secondary); margin: 0 0 10px; }
 
         .export-group {
             display: flex;
@@ -614,44 +672,95 @@
                 padding: 0 !important;
                 background: #ffffff !important;
             }
+            .score-editor { display: none !important; }
+        }
+
+        @media (max-width: 768px) {
+            .score-editor-fields { align-items: stretch; }
+            .score-editor-field { flex: 1 1 120px; }
+            .score-editor-actions .btn { flex: 1 1 auto; justify-content: center; }
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
 </head>
-<body>
+<body class="site-body studio-body">
+    {% include "partials/icon_sprite.html" %}
     <!-- Header Navigation -->
-    <header>
-        <div class="brand-box">
-            <div class="brand-logo">🎼</div>
-            <div>
-                <div class="brand-title">MELODYX</div>
-                <div class="brand-tagline">Studio de Partitions & Direction d'Orchestre</div>
-            </div>
-        </div>
-
-        <div class="header-actions">
-            <span class="badge-status">
-                <span class="status-dot"></span>
-                <span>Moteur Musical Actif</span>
-            </span>
-            <a href="#" class="btn btn-gold btn-sm" id="btnDownloadPdfHeader" target="_blank" style="pointer-events:none;opacity:0.5;">
-                📄 Télécharger Partition PDF
+    <header class="site-header">
+        <div class="site-header-inner">
+            <a class="site-brand" href="{{ url_for('web.index') }}" aria-label="MELODYX, accueil">
+                <img src="{{ url_for('static', filename='img/melodyx-logo.jpeg') }}" alt="MELODYX">
             </a>
+            <button class="site-nav-toggle" type="button" aria-expanded="false" aria-controls="siteNav" data-nav-toggle>
+                <span class="menu-lines" aria-hidden="true"><i></i><i></i></span><span>Menu</span>
+            </button>
+            <nav class="site-nav" id="siteNav" aria-label="Navigation principale">
+                <a href="{{ url_for('web.index') }}">Accueil</a>
+                <a class="is-active" href="{{ url_for('web.studio') }}">Studio</a>
+                <a href="{{ url_for('web.library') }}">Bibliothèque</a>
+                <a href="{{ url_for('web.pricing') }}">Tarifs</a>
+                <a href="{{ url_for('web.policy', policy_id='privacy') }}">Confidentialité &amp; droits</a>
+            </nav>
+            <div class="site-header-side">
+                {% if billing.is_paid %}
+                <span class="usage-pill paid-pill">{{ billing.plan_name }}</span>
+                {% else %}
+                <a class="usage-pill" id="usageBadge" href="{{ url_for('web.pricing') }}">{{ billing.remaining_free }}/10 offertes</a>
+                {% endif %}
+                <a class="header-cta" href="#dropZone">Importer un morceau <svg class="icon" aria-hidden="true"><use href="#mx-arrow-up-right"></use></svg></a>
+            </div>
         </div>
     </header>
 
     <!-- Main Workspace -->
-    <main>
+    <main class="studio-main">
         <!-- Left Sidebar: Controls, Upload, Metrics -->
         <aside class="sidebar">
+
+            <section class="policy-consent-card" id="policyConsentCard" aria-labelledby="policyConsentTitle" {% if policies_accepted %}hidden{% endif %}>
+                <div class="policy-consent-heading">
+                    <span class="policy-shield"><svg class="icon" aria-hidden="true"><use href="#mx-shield"></use></svg></span>
+                    <div>
+                        <h2 id="policyConsentTitle">Avant ton premier import</h2>
+                        <p>Lis les trois documents et confirme chaque choix avant de sélectionner un morceau.</p>
+                    </div>
+                </div>
+                <div class="policy-consent-options">
+                    <div class="policy-consent-option">
+                        <a href="{{ url_for('web.policy', policy_id='privacy') }}" target="_blank" rel="noopener noreferrer">Lire la politique de confidentialité <svg class="icon" aria-hidden="true"><use href="#mx-arrow-up-right"></use></svg></a>
+                        <label><input id="consentPrivacy" type="checkbox"> J’ai lu et j’accepte la politique de confidentialité.</label>
+                    </div>
+                    <div class="policy-consent-option">
+                        <a href="{{ url_for('web.policy', policy_id='copyright') }}" target="_blank" rel="noopener noreferrer">Lire le respect du droit d’auteur <svg class="icon" aria-hidden="true"><use href="#mx-arrow-up-right"></use></svg></a>
+                        <label><input id="consentCopyright" type="checkbox"> Je confirme avoir le droit d’utiliser le morceau importé.</label>
+                    </div>
+                    <div class="policy-consent-option">
+                        <a href="{{ url_for('web.policy', policy_id='plagiarism') }}" target="_blank" rel="noopener noreferrer">Lire la politique de non-plagiat <svg class="icon" aria-hidden="true"><use href="#mx-arrow-up-right"></use></svg></a>
+                        <label><input id="consentPlagiarism" type="checkbox"> Je m’engage à citer les créateurs et à ne pas présenter leur travail comme le mien.</label>
+                    </div>
+                </div>
+                <label class="policy-ai-option"><input id="consentGemini" type="checkbox"> <span><strong>Option facultative — Gemini</strong><br>J’autorise l’envoi à Google Gemini des notes, accords et repères musicaux dérivés pour obtenir un résumé IA. L’audio original n’est pas envoyé. Laisse décoché pour une transcription sans transfert IA.</span></label>
+                <div class="policy-consent-footer">
+                    <span class="policy-version-label">Documents {{ policy_version }} · choix conservés 30 jours</span>
+                    <button class="button button-primary" id="acceptPolicies" type="button" disabled onclick="acceptUploadPolicies()">Accepter et continuer</button>
+                </div>
+                <p class="policy-consent-status" id="policyConsentStatus" role="status" aria-live="polite"></p>
+            </section>
+
+            <section class="policy-accepted-notice" id="policyAcceptedNotice" {% if not policies_accepted %}hidden{% endif %} aria-label="Préférences de confidentialité">
+                <div><svg class="icon" aria-hidden="true"><use href="#mx-check-circle"></use></svg><span>Documents acceptés · <strong id="geminiConsentLabel">{{ 'Gemini activé' if policy_acceptance and policy_acceptance.gemini_opt_in else 'Gemini désactivé' }}</strong></span></div>
+                <button class="policy-ai-toggle" id="toggleGeminiConsent" type="button" onclick="toggleGeminiConsent()">{{ 'Désactiver Gemini' if policy_acceptance and policy_acceptance.gemini_opt_in else 'Autoriser Gemini' }}</button>
+                <a href="{{ url_for('web.policy', policy_id='privacy') }}" target="_blank" rel="noopener noreferrer">Relire les politiques</a>
+            </section>
             
             <!-- Ingestion: Upload Audio -->
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">📥 Importer une Chanson</span>
+                    <span class="card-title"><svg class="icon" aria-hidden="true"><use href="#mx-upload"></use></svg>Importer une chanson</span>
                 </div>
-                <input type="file" id="fileInput" accept="audio/*,.m4a,.mp3,.wav,.webm" style="display:none" onchange="handleFileUpload(event)">
-                <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-                    <div class="upload-icon">🎵</div>
+                <input type="file" id="fileInput" accept="audio/*,.m4a,.mp3,.wav,.webm" style="display:none" onchange="handleFileUpload(event)" {% if not policies_accepted %}disabled{% endif %}>
+                <div class="upload-zone" id="dropZone" role="button" tabindex="{{ 0 if policies_accepted else -1 }}" aria-disabled="{{ 'false' if policies_accepted else 'true' }}" aria-label="Importer un fichier audio" onclick="openAudioPicker()">
+                    <div class="upload-icon"><svg class="icon" aria-hidden="true"><use href="#mx-music-note"></use></svg></div>
                     <div class="upload-text">Glisser-déposer un fichier audio</div>
                     <div class="upload-sub">M4A, MP3, WAV, WebM (Max 50 Mo)</div>
                 </div>
@@ -659,8 +768,8 @@
                 <!-- Record Microphone -->
                 <div class="record-box">
                     <span style="font-size:12px; color:var(--text-secondary);">Ou enregistrer en direct :</span>
-                    <button class="btn-record" id="btnRecord" onclick="toggleRecording()">
-                        <span id="recordIcon">⏺</span>
+                    <button class="btn-record" id="btnRecord" onclick="toggleRecording()" {% if not policies_accepted %}disabled{% endif %}>
+                        <span id="recordIcon"><svg class="icon" aria-hidden="true"><use href="#mx-mic"></use></svg></span>
                         <span id="recordText">Microphone</span>
                     </button>
                 </div>
@@ -669,7 +778,7 @@
             <!-- Paramètres de Partition & Repertoire -->
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">📊 Fiche d'Orchestre</span>
+                    <span class="card-title"><svg class="icon" aria-hidden="true"><use href="#mx-chart"></use></svg>Fiche d’orchestre</span>
                 </div>
                 <div class="metrics-grid">
                     <div class="metric-item">
@@ -705,13 +814,14 @@
             <!-- Gemini AI Coordination Settings -->
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">✨ Coordination IA</span>
+                    <span class="card-title"><svg class="icon" aria-hidden="true"><use href="#mx-sparkles"></use></svg>Coordination IA</span>
                 </div>
                 <p style="font-size:11px; color:var(--text-secondary); margin-bottom:8px;">
                     Gemini coordonne l'interprétation harmonique et assemble les repères d'ensemble ([A], [B], [C]).
                 </p>
                 <div style="font-size:11px; color:#10b981; font-weight:600;">
-                    ✓ Séparation stricte calculs (Librosa/BasicPitch) et explications (Gemini).
+                    <svg class="icon" aria-hidden="true"><use href="#mx-check-circle"></use></svg>
+                    Séparation stricte calculs (Librosa/BasicPitch) et explications (Gemini).
                 </div>
             </div>
         </aside>
@@ -729,26 +839,27 @@
                 </div>
 
                 <div class="toolbar-controls">
-                    <button class="btn btn-outline btn-sm" onclick="zoomScore(0.1)" title="Zoom avant">🔍 +</button>
-                    <button class="btn btn-outline btn-sm" onclick="zoomScore(-0.1)" title="Zoom arrière">🔍 -</button>
+                    <button class="btn btn-outline btn-sm" onclick="zoomScore(0.1)" title="Zoom avant"><svg class="icon" aria-hidden="true"><use href="#mx-zoom-in"></use></svg>Zoom avant</button>
+                    <button class="btn btn-outline btn-sm" onclick="zoomScore(-0.1)" title="Zoom arrière"><svg class="icon" aria-hidden="true"><use href="#mx-zoom-out"></use></svg>Zoom arrière</button>
                     <button class="btn btn-outline btn-sm" onclick="resetZoomScore()" title="Réinitialiser zoom">100%</button>
-                    <button class="btn btn-outline btn-sm" onclick="window.print()" title="Imprimer la partition">🖨️ Imprimer</button>
+                    <button class="btn btn-gold btn-sm" id="btnToggleScoreEditor" onclick="window.scoreEditor && window.scoreEditor.toggle()" hidden><svg class="icon" aria-hidden="true"><use href="#mx-edit"></use></svg><span>Éditer le résultat final</span></button>
+                    <button class="btn btn-outline btn-sm" onclick="window.print()" title="Imprimer la partition"><svg class="icon" aria-hidden="true"><use href="#mx-print"></use></svg>Imprimer</button>
                     <a href="#" id="btnDownloadPdf" class="btn btn-gold btn-sm" style="pointer-events:none;opacity:0.5;">
-                        📄 Télécharger PDF
+                        <svg class="icon" aria-hidden="true"><use href="#mx-file-download"></use></svg>Télécharger PDF
                     </a>
                     <a href="#" id="btnDownloadMidi" class="btn btn-outline btn-sm" style="pointer-events:none;opacity:0.5;">
-                        🎹 MIDI
+                        <svg class="icon" aria-hidden="true"><use href="#mx-midi"></use></svg>MIDI
                     </a>
                     <a href="#" id="btnDownloadXml" class="btn btn-outline btn-sm" style="pointer-events:none;opacity:0.5;">
-                        🎼 MusicXML
+                        <svg class="icon" aria-hidden="true"><use href="#mx-score"></use></svg>MusicXML
                     </a>
                 </div>
             </div>
 
             <!-- Audio Player Bar -->
             <div class="audio-player-bar">
-                <button class="btn-play-big" id="btnPlay" onclick="togglePlayAudio()">
-                    ▶
+                <button class="btn-play-big" id="btnPlay" type="button" aria-label="Lire l’audio" onclick="togglePlayAudio()">
+                    <svg class="icon" aria-hidden="true"><use href="#mx-play"></use></svg>
                 </button>
                 <div class="player-timeline">
                     <div class="timeline-bar-box" id="timelineBar" onclick="seekAudio(event)">
@@ -767,32 +878,96 @@
             <!-- Multi-Instrument Pupitre Switcher Bar -->
             <div class="instrument-bar-container" id="instrumentBar">
                 <div class="instrument-bar-title">
-                    <span>🎼</span>
+                    <svg class="icon" aria-hidden="true"><use href="#mx-score"></use></svg>
                     <span>Pupitres d'Orchestre :</span>
                 </div>
                 <div class="instrument-tabs" id="instrumentTabs">
                     <div class="instrument-tab active" data-inst="conductor" onclick="switchInstrument('conductor')">
-                        <span>🎼</span>
+                        <svg class="icon" aria-hidden="true"><use href="#mx-score"></use></svg>
                         <span>Conducteur Général</span>
                         <span class="inst-badge">Ensemble</span>
                     </div>
                     <div class="instrument-tab" data-inst="piano" onclick="switchInstrument('piano')">
-                        <span>🎹</span>
+                        <svg class="icon" aria-hidden="true"><use href="#mx-piano"></use></svg>
                         <span>Piano / Clavier</span>
                         <span class="inst-badge">Sol + Fa</span>
                     </div>
                     <div class="instrument-tab" data-inst="lead" onclick="switchInstrument('lead')">
-                        <span>🎤</span>
+                        <svg class="icon" aria-hidden="true"><use href="#mx-mic"></use></svg>
                         <span>Chant / Lead</span>
                         <span class="inst-badge">Clé de Sol</span>
                     </div>
                     <div class="instrument-tab" data-inst="bass" onclick="switchInstrument('bass')">
-                        <span>🎸</span>
+                        <svg class="icon" aria-hidden="true"><use href="#mx-guitar"></use></svg>
                         <span>Basse</span>
                         <span class="inst-badge">Clé de Fa</span>
                     </div>
                 </div>
             </div>
+
+            <section class="score-editor" id="scoreEditorPanel" hidden aria-label="Édition du résultat final de la partition">
+                <div class="score-editor-header">
+                    <div class="score-editor-title" id="scoreEditorTitle">Édition du résultat final</div>
+                    <div class="score-editor-status" id="scoreEditorStatus" role="status" aria-live="polite">Sélectionne une note ou un silence dans la liste.</div>
+                </div>
+                <p class="score-editor-help">Ces commandes modifient uniquement le résultat final affiché pour ce pupitre. L’analyse audio d’origine reste intacte.</p>
+                <div class="score-editor-fields">
+                    <div class="score-editor-field"><label for="scoreEditPart">Partie</label><select id="scoreEditPart" aria-label="Partie de la partition"></select></div>
+                    <div class="score-editor-field"><label for="scoreEditMeasure">Mesure</label><select id="scoreEditMeasure" aria-label="Mesure de la partition"></select></div>
+                    <div class="score-editor-field"><label for="scoreEditPitch">Hauteur</label><select id="scoreEditPitch" aria-label="Hauteur de note"></select></div>
+                    <div class="score-editor-field">
+                        <label for="scoreEditSpelling">Altération</label>
+                        <select id="scoreEditSpelling" aria-label="Écriture de l’altération">
+                            <option value="sharp">Dièses</option><option value="flat">Bémols</option>
+                        </select>
+                    </div>
+                    <div class="score-editor-field">
+                        <label for="scoreEditDuration">Durée</label>
+                        <select id="scoreEditDuration" aria-label="Durée de note">
+                            <option value="4">Ronde</option><option value="2">Blanche</option>
+                            <option value="1" selected>Noire</option><option value="0.5">Croche</option>
+                            <option value="0.25">Double croche</option><option value="0.125">Triple croche</option>
+                        </select>
+                    </div>
+                    <div class="score-editor-field">
+                        <label for="scoreEditDots">Point</label>
+                        <select id="scoreEditDots" aria-label="Points de prolongation">
+                            <option value="0">Aucun</option><option value="1">Pointée</option><option value="2">Double point</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="score-editor-actions">
+                    <button class="btn btn-outline btn-sm" id="scoreEditUndo" type="button">Annuler</button>
+                    <button class="btn btn-outline btn-sm" id="scoreEditRedo" type="button">Rétablir</button>
+                    <button class="btn btn-outline btn-sm" id="scoreEditApply" type="button">Appliquer à la sélection</button>
+                    <button class="btn btn-outline btn-sm" id="scoreEditRest" type="button">Convertir en silence</button>
+                    <button class="btn btn-outline btn-sm" id="scoreEditAdd" type="button">Ajouter note / accord</button>
+                    <button class="btn btn-outline btn-sm" id="scoreEditDelete" type="button">Supprimer</button>
+                    <button class="btn btn-gold btn-sm" id="scoreEditSave" type="button" disabled>Enregistrer les modifications</button>
+                </div>
+                <section class="virtual-piano-card" aria-labelledby="virtualPianoTitle">
+                    <div class="virtual-piano-header">
+                        <div class="virtual-piano-title" id="virtualPianoTitle">
+                            <svg class="icon" aria-hidden="true"><use href="#mx-piano"></use></svg>
+                            Clavier virtuel
+                            <span class="virtual-piano-range" id="pianoRangeLabel">C3 – B4</span>
+                        </div>
+                        <div class="virtual-piano-controls" aria-label="Changer d’octave">
+                            <button class="piano-range-button" id="pianoOctaveDown" type="button" aria-label="Descendre d’une octave"><svg class="icon" aria-hidden="true"><use href="#mx-minus"></use></svg></button>
+                            <button class="piano-range-button" id="pianoOctaveUp" type="button" aria-label="Monter d’une octave"><svg class="icon" aria-hidden="true"><use href="#mx-plus"></use></svg></button>
+                        </div>
+                    </div>
+                    <p class="virtual-piano-help">Sélectionne une note ou un silence, puis joue une touche. La note change dans l’aperçu; enregistre pour conserver le résultat final.</p>
+                    <div class="virtual-piano-scroll" role="region" aria-label="Clavier de piano virtuel">
+                        <div class="virtual-piano" id="scorePianoKeyboard"></div>
+                    </div>
+                    <div class="virtual-piano-footer">
+                        <span class="virtual-piano-choice" id="pianoSelectionLabel" aria-live="polite">Sélectionne un événement de la partition.</span>
+                        <span class="virtual-piano-instruction">Clavier d’ordinateur : A W S E D F T G Y H U J</span>
+                    </div>
+                </section>
+                <div class="score-event-list" id="scoreEventList" role="group" aria-label="Notes et silences de la mesure"></div>
+            </section>
 
             <!-- Sheet Music Engraved Paper Canvas -->
             <div class="sheet-paper" id="paperContainer">
@@ -807,7 +982,7 @@
                 <!-- OpenSheetMusicDisplay container -->
                 <div id="osmdCanvas">
                     <div id="osmdPlaceholder" style="text-align: center; padding: 140px 20px; color: #888;">
-                        <div style="font-size: 48px; margin-bottom: 16px;">🎼</div>
+                        <div class="score-empty-icon"><svg class="icon" aria-hidden="true"><use href="#mx-score"></use></svg></div>
                         <div style="font-size: 18px; font-weight: 600; color: #444; margin-bottom: 8px;">Aucune partition chargée</div>
                         <div style="font-size: 14px; color: #777;">Glissez-déposez un morceau audio dans la barre latérale pour lancer la transcription et afficher la partition ici.</div>
                     </div>
@@ -816,6 +991,19 @@
 
         </section>
     </main>
+
+    <footer class="site-footer">
+        <div class="site-footer-inner">
+            <a class="footer-brand" href="{{ url_for('web.index') }}"><img src="{{ url_for('static', filename='img/melodyx-logo.jpeg') }}" alt="MELODYX"></a>
+            <p>La musique entendue. La partition en main.</p>
+            <nav aria-label="Liens de pied de page">
+                <a href="{{ url_for('web.studio') }}">Studio</a>
+                <a href="{{ url_for('web.library') }}">Bibliothèque</a>
+                <a href="{{ url_for('web.pricing') }}">Tarifs</a>
+            </nav>
+            <small>© MELODYX · Atelier musical numérique</small>
+        </div>
+    </footer>
 
     <!-- Hidden HTML5 Audio Element -->
     <audio id="audioPlayer" src="" preload="auto"></audio>
@@ -827,6 +1015,11 @@
         let isPlaying = false;
         let currentAnalysisId = "{{ default_analysis_id }}";
         let currentInstrument = "{{ default_instrument or 'conductor' }}";
+        let billingRequiresPayment = {{ billing.requires_payment|tojson }};
+        const currentPolicyVersion = {{ policy_version|tojson }};
+        let policiesAccepted = {{ policies_accepted|tojson }};
+        let geminiOptIn = {{ (policy_acceptance.gemini_opt_in == 1 if policy_acceptance else false)|tojson }};
+        let policyRequestPending = false;
         let analysisData = null;
         let mediaRecorder = null;
         let recordedChunks = [];
@@ -838,6 +1031,121 @@
             "lead": { name: "Chant / Mélodie Lead", badge: "Portée Soliste (Clé de Sol)" },
             "bass": { name: "Basse", badge: "Ligne de Basse (Clé de Fa)" }
         };
+
+        window.MELODYX_SCORE_CONTEXT = {
+            get osmd() { return osmd; },
+            get zoom() { return currentZoom; },
+            get labels() { return INSTRUMENT_LABELS; }
+        };
+
+        function setSvgIcon(element, symbol) {
+            if (!element) return;
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.classList.add("icon");
+            svg.setAttribute("aria-hidden", "true");
+            const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+            use.setAttribute("href", `#${symbol}`);
+            svg.appendChild(use);
+            element.replaceChildren(svg);
+        }
+
+        function syncPolicyControls() {
+            const fileInput = document.getElementById("fileInput");
+            const dropZone = document.getElementById("dropZone");
+            const recordButton = document.getElementById("btnRecord");
+            if (fileInput) fileInput.disabled = !policiesAccepted;
+            if (dropZone) {
+                dropZone.setAttribute("aria-disabled", String(!policiesAccepted));
+                dropZone.tabIndex = policiesAccepted ? 0 : -1;
+                dropZone.classList.toggle("is-locked", !policiesAccepted);
+            }
+            if (recordButton) recordButton.disabled = !policiesAccepted;
+        }
+
+        function promptPolicyConsent(message = "Accepte les trois documents avant de choisir un fichier ou d’utiliser le microphone.") {
+            if (policiesAccepted) return;
+            const card = document.getElementById("policyConsentCard");
+            const status = document.getElementById("policyConsentStatus");
+            if (card) {
+                card.hidden = false;
+                card.scrollIntoView({ behavior: "smooth", block: "center" });
+                document.getElementById("consentPrivacy")?.focus({ preventScroll: true });
+            }
+            if (status) status.textContent = message;
+        }
+
+        function updatePolicyAcceptButton() {
+            const button = document.getElementById("acceptPolicies");
+            if (!button) return;
+            const accepted = ["consentPrivacy", "consentCopyright", "consentPlagiarism"]
+                .every(id => document.getElementById(id)?.checked);
+            button.disabled = !accepted || policyRequestPending;
+        }
+
+        async function acceptUploadPolicies() {
+            updatePolicyAcceptButton();
+            const button = document.getElementById("acceptPolicies");
+            const status = document.getElementById("policyConsentStatus");
+            if (!button || button.disabled || policyRequestPending) return;
+            policyRequestPending = true;
+            button.disabled = true;
+            if (status) status.textContent = "Enregistrement de tes choix…";
+            try {
+                const response = await fetch("/api/policies/consent", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        policy_version: currentPolicyVersion,
+                        privacy_accepted: document.getElementById("consentPrivacy").checked,
+                        copyright_accepted: document.getElementById("consentCopyright").checked,
+                        plagiarism_accepted: document.getElementById("consentPlagiarism").checked,
+                        gemini_opt_in: document.getElementById("consentGemini").checked,
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error?.message || "Tes choix n’ont pas pu être enregistrés.");
+                policiesAccepted = true;
+                geminiOptIn = Boolean(data.gemini_opt_in);
+                syncPolicyControls();
+                document.getElementById("policyConsentCard").hidden = true;
+                document.getElementById("policyAcceptedNotice").hidden = false;
+                updateGeminiConsentNotice();
+            } catch (error) {
+                if (status) status.textContent = error.message || "Erreur pendant l’enregistrement des choix.";
+            } finally {
+                policyRequestPending = false;
+                updatePolicyAcceptButton();
+            }
+        }
+
+        function updateGeminiConsentNotice() {
+            const label = document.getElementById("geminiConsentLabel");
+            const button = document.getElementById("toggleGeminiConsent");
+            if (label) label.textContent = geminiOptIn ? "Gemini activé" : "Gemini désactivé";
+            if (button) button.textContent = geminiOptIn ? "Désactiver Gemini" : "Autoriser Gemini";
+        }
+
+        async function toggleGeminiConsent() {
+            const button = document.getElementById("toggleGeminiConsent");
+            if (!button || !policiesAccepted) return;
+            const nextValue = !geminiOptIn;
+            button.disabled = true;
+            try {
+                const response = await fetch("/api/policies/ai-consent", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: nextValue }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error?.message || "Le choix Gemini n’a pas pu être mis à jour.");
+                geminiOptIn = Boolean(data.gemini_opt_in);
+                updateGeminiConsentNotice();
+            } catch (error) {
+                window.alert(error.message || "Erreur pendant la mise à jour du choix Gemini.");
+            } finally {
+                button.disabled = false;
+            }
+        }
 
         const audio = document.getElementById("audioPlayer");
         const btnPlay = document.getElementById("btnPlay");
@@ -878,7 +1186,8 @@
                 if (!osmd) initOSMD();
                 const resp = await fetch(url);
                 if (!resp.ok) throw new Error("Could not fetch score MusicXML");
-                let xmlText = await resp.text();
+                const rawXmlText = await resp.text();
+                let xmlText = rawXmlText;
                 // Strip rogue standalone harmony elements to ensure 100% robust OSMD rendering
                 xmlText = xmlText.replace(/<harmony[\s\S]*?<\/harmony>/gi, "");
                 await osmd.load(xmlText);
@@ -888,6 +1197,9 @@
                     osmd.cursor.show();
                     osmd.cursor.reset();
                 }
+                if (window.scoreEditor) {
+                    window.scoreEditor.setScore(rawXmlText, resp.headers);
+                }
                 console.log("MusicXML rendered successfully");
             } catch (err) {
                 console.error("OSMD render error:", err);
@@ -895,7 +1207,7 @@
                 if (container && container.innerHTML.trim() === "") {
                     container.innerHTML = `
                         <div style="text-align: center; padding: 100px 20px; color: #888;">
-                            <div style="font-size: 36px; margin-bottom: 12px;">🎼</div>
+                            <div class="score-empty-icon"><svg class="icon" aria-hidden="true"><use href="#mx-score"></use></svg></div>
                             <div style="font-size: 16px; font-weight: 600; color: #444; margin-bottom: 6px;">Aperçu direct de la partition</div>
                             <div style="font-size: 13px; color: #777; max-width: 500px; margin: 0 auto 16px;">Téléchargez la partition complète haute fidélité en PDF vectoriel ou MusicXML avec les boutons ci-dessus.</div>
                         </div>`;
@@ -921,17 +1233,39 @@
         // Audio controls
         function togglePlayAudio() {
             if (audio.paused) {
-                audio.play();
-                btnPlay.textContent = "⏸";
+                const tempoBpm = Number(analysisData?.result?.music?.tempo_bpm?.value) || 120;
+                const playRequest = audio.play();
+                if (playRequest && typeof playRequest.then === "function") {
+                    playRequest.then(() => {
+                        window.scoreEditor?.startPlayback(audio, tempoBpm);
+                    }).catch(() => {
+                        window.scoreEditor?.stopPlayback();
+                        setSvgIcon(btnPlay, "mx-play");
+                        btnPlay.setAttribute("aria-label", "Lire l’audio");
+                        isPlaying = false;
+                    });
+                } else {
+                    window.scoreEditor?.startPlayback(audio, tempoBpm);
+                }
+                setSvgIcon(btnPlay, "mx-pause");
+                btnPlay.setAttribute("aria-label", "Mettre l’audio en pause");
                 isPlaying = true;
             } else {
                 audio.pause();
-                btnPlay.textContent = "▶";
+                window.scoreEditor?.stopPlayback();
+                setSvgIcon(btnPlay, "mx-play");
+                btnPlay.setAttribute("aria-label", "Lire l’audio");
                 isPlaying = false;
             }
         }
 
         audio.addEventListener("timeupdate", () => {
+            if (isPlaying) {
+                window.scoreEditor?.syncPlaybackTime(
+                    audio.currentTime,
+                    Number(analysisData?.result?.music?.tempo_bpm?.value) || 120,
+                );
+            }
             if (!audio.duration) return;
             const pct = (audio.currentTime / audio.duration) * 100;
             timelineProgress.style.width = pct + "%";
@@ -981,9 +1315,28 @@
         });
 
         audio.addEventListener("ended", () => {
-            btnPlay.textContent = "▶";
+            window.scoreEditor?.stopPlayback();
+            setSvgIcon(btnPlay, "mx-play");
+            btnPlay.setAttribute("aria-label", "Lire l’audio");
             isPlaying = false;
             if (osmd && osmd.cursor) osmd.cursor.reset();
+        });
+
+        audio.addEventListener("pause", () => {
+            window.scoreEditor?.stopPlayback();
+            if (audio.ended) return;
+            setSvgIcon(btnPlay, "mx-play");
+            btnPlay.setAttribute("aria-label", "Lire l’audio");
+            isPlaying = false;
+        });
+
+        audio.addEventListener("seeked", () => {
+            if (!audio.paused) {
+                window.scoreEditor?.syncPlaybackTime(
+                    audio.currentTime,
+                    Number(analysisData?.result?.music?.tempo_bpm?.value) || 120,
+                );
+            }
         });
 
         function seekAudio(e) {
@@ -992,6 +1345,12 @@
             const clickPos = (e.clientX - rect.left) / rect.width;
             if (audio.duration) {
                 audio.currentTime = clickPos * audio.duration;
+                if (!audio.paused) {
+                    window.scoreEditor?.syncPlaybackTime(
+                        audio.currentTime,
+                        Number(analysisData?.result?.music?.tempo_bpm?.value) || 120,
+                    );
+                }
             }
         }
 
@@ -1003,7 +1362,9 @@
 
         // Switch active instrument and reload partition score
         async function switchInstrument(instId) {
+            if (window.scoreEditor && !(await window.scoreEditor.beforeScopeChange())) return;
             currentInstrument = instId;
+            if (window.scoreEditor) window.scoreEditor.setScope(currentAnalysisId, instId);
 
             // Highlight active tab
             document.querySelectorAll(".instrument-tab").forEach(tab => {
@@ -1065,6 +1426,7 @@
         // Load complete analysis data
         async function loadAnalysis(aid) {
             if (!aid) return;  // No analysis to load
+            if (currentAnalysisId && currentAnalysisId !== aid && window.scoreEditor && !(await window.scoreEditor.beforeScopeChange())) return;
             try {
                 const url = `/api/analysis/${aid}`;
                 const resp = await fetch(url);
@@ -1126,7 +1488,27 @@
         }
 
         // File upload handling (supports click selection & drag-and-drop)
+        function openAudioPicker() {
+            if (!policiesAccepted) {
+                promptPolicyConsent();
+                return;
+            }
+            if (billingRequiresPayment) {
+                window.location.assign("/pricing?reason=quota");
+                return;
+            }
+            document.getElementById("fileInput").click();
+        }
+
         async function handleFileUpload(event) {
+            if (!policiesAccepted) {
+                promptPolicyConsent();
+                return;
+            }
+            if (billingRequiresPayment) {
+                window.location.assign("/pricing?reason=quota");
+                return;
+            }
             let file = null;
             if (event.target && event.target.files && event.target.files.length > 0) {
                 file = event.target.files[0];
@@ -1145,7 +1527,7 @@
             formData.append("audio", file);
 
             const uploadZone = document.getElementById("dropZone");
-            uploadZone.innerHTML = `<div class="upload-icon">⏳</div><div class="upload-text">Analyse &amp; Transcription en cours...</div><div class="upload-sub">Détection des portées, notes, tonalité et accords...</div>`;
+            setUploadState("mx-loader", "Préparation de la transcription…", "Le traitement démarre dès que le fichier est vérifié.");
 
             try {
                 const resp = await fetch("/api/audio/upload", {
@@ -1153,46 +1535,118 @@
                     body: formData,
                 });
                 const data = await resp.json();
+                if (resp.status === 428 && data.error?.code === "policy_consent_required") {
+                    promptPolicyConsent(data.error.message);
+                    return;
+                }
+                if (resp.status === 402 && data.error?.code === "quota_exceeded") {
+                    window.location.assign(data.error.pricing_url || "/pricing?reason=quota");
+                    return;
+                }
                 if (!resp.ok) throw new Error(data.error ? data.error.message : "Erreur d'envoi");
 
                 const aid = data.analysis_id;
+                refreshBillingBadge();
                 pollAnalysis(aid);
             } catch (err) {
-                alert("Erreur lors de l'envoi : " + err.message);
-                uploadZone.innerHTML = `<div class="upload-icon">❌</div><div class="upload-text">Échec de l'envoi</div><div class="upload-sub">Cliquez pour réessayer</div>`;
+                setUploadState("mx-alert", "Envoi impossible", err.message || "Vérifie le fichier puis réessaie.");
             }
         }
 
         // Poll analysis status
         async function pollAnalysis(aid) {
-            const uploadZone = document.getElementById("dropZone");
-            const interval = setInterval(async () => {
+            let networkFailures = 0;
+            const stageLabels = {
+                decoding: "Lecture et préparation de l’audio",
+                features: "Analyse du rythme et de l’harmonie",
+                transcription: "Repérage des notes musicales",
+                quantization: "Mise en place des notes dans les mesures",
+                notation: "Gravure de la partition",
+                ai_interpretation: "Finalisation de la partition",
+            };
+            const poll = async () => {
                 try {
                     const resp = await fetch(`/api/analysis/${aid}`);
                     const an = await resp.json();
+                    if (!resp.ok) throw new Error(an.error?.message || "État de transcription indisponible.");
+                    networkFailures = 0;
                     if (an.status === "completed") {
-                        clearInterval(interval);
-                        uploadZone.innerHTML = `<div class="upload-icon">✅</div><div class="upload-text">Partition générée avec succès !</div><div class="upload-sub">Chargement du visualiseur...</div>`;
+                        setUploadState("mx-check-circle", "Partition prête à éditer", "Chargement de la partition finale…");
+                        refreshBillingBadge();
                         setTimeout(() => {
-                            uploadZone.innerHTML = `<div class="upload-icon">🎵</div><div class="upload-text">Glisser-déposer un fichier audio</div><div class="upload-sub">M4A, MP3, WAV, WebM (Max 50 Mo)</div>`;
                             loadAnalysis(aid);
                         }, 1000);
+                        return;
                     } else if (an.status === "failed") {
-                        clearInterval(interval);
-                        alert("Erreur d'analyse : " + (an.error_message || "Échec"));
-                        uploadZone.innerHTML = `<div class="upload-icon">❌</div><div class="upload-text">Échec</div><div class="upload-sub">Cliquez pour réessayer</div>`;
+                        setUploadState("mx-alert", "Transcription interrompue", an.error_message || "Réessaie avec un autre fichier audio.");
+                        return;
                     } else {
                         const pct = Math.round((an.progress || 0) * 100);
-                        uploadZone.innerHTML = `<div class="upload-icon">⏳</div><div class="upload-text">Transcription (${pct}%)</div><div class="upload-sub">Étape : ${an.stage || 'traitement'}</div>`;
+                        const queued = an.status === "queued";
+                        const stage = stageLabels[an.stage] || "Préparation de la transcription";
+                        setUploadState(queued ? "mx-clock" : "mx-loader", queued ? "En attente du moteur audio" : `Transcription en cours · ${pct}%`, queued ? "Ta demande est enregistrée; le traitement démarre dès que le moteur est disponible." : stage, queued ? null : pct);
                     }
                 } catch (e) {
-                    clearInterval(interval);
+                    networkFailures += 1;
+                    setUploadState("mx-loader", "Connexion temporairement interrompue", "Je réessaie automatiquement; ta transcription reste enregistrée.");
                 }
-            }, 2000);
+                window.setTimeout(poll, networkFailures ? 5000 : 1800);
+            };
+            poll();
+        }
+
+        function setUploadState(icon, title, detail, progress = null) {
+            const zone = document.getElementById("dropZone");
+            if (!zone) return;
+            const iconEl = document.createElement("div");
+            iconEl.className = "upload-icon";
+            setSvgIcon(iconEl, icon);
+            if (icon === "mx-loader") iconEl.querySelector(".icon")?.classList.add("is-spinning");
+            const titleEl = document.createElement("div");
+            titleEl.className = "upload-text";
+            titleEl.textContent = title;
+            const detailEl = document.createElement("div");
+            detailEl.className = "upload-sub";
+            detailEl.textContent = detail;
+            zone.replaceChildren(iconEl, titleEl, detailEl);
+            if (progress !== null) {
+                const track = document.createElement("div");
+                track.className = "upload-progress-track";
+                track.setAttribute("role", "progressbar");
+                track.setAttribute("aria-label", "Avancement de la transcription");
+                track.setAttribute("aria-valuemin", "0");
+                track.setAttribute("aria-valuemax", "100");
+                track.setAttribute("aria-valuenow", String(progress));
+                const fill = document.createElement("span");
+                fill.style.width = `${progress}%`;
+                track.appendChild(fill);
+                zone.appendChild(track);
+            }
+        }
+
+        async function refreshBillingBadge() {
+            const badge = document.getElementById("usageBadge");
+            if (!badge) return;
+            try {
+                const resp = await fetch("/api/billing/status");
+                if (!resp.ok) return;
+                const billing = await resp.json();
+                billingRequiresPayment = Boolean(billing.requires_payment);
+                badge.textContent = billing.is_paid ? billing.plan_name : `${billing.remaining_free}/10 offertes`;
+                badge.classList.toggle("quota-exhausted", billing.requires_payment);
+            } catch (_) { /* The badge can refresh on the next page load. */ }
         }
 
         // Live Microphone Recording
         async function toggleRecording() {
+            if (!isRecording && !policiesAccepted) {
+                promptPolicyConsent();
+                return;
+            }
+            if (!isRecording && billingRequiresPayment) {
+                window.location.assign("/pricing?reason=quota");
+                return;
+            }
             const btn = document.getElementById("btnRecord");
             const icon = document.getElementById("recordIcon");
             const text = document.getElementById("recordText");
@@ -1207,7 +1661,7 @@
                     mediaRecorder.start();
                     isRecording = true;
                     btn.classList.add("recording");
-                    icon.textContent = "⏹";
+                    setSvgIcon(icon, "mx-stop");
                     text.textContent = "Arrêter";
                 } catch (err) {
                     alert("Accès microphone refusé : " + err.message);
@@ -1216,7 +1670,7 @@
                 mediaRecorder.stop();
                 isRecording = false;
                 btn.classList.remove("recording");
-                icon.textContent = "⏺";
+                setSvgIcon(icon, "mx-mic");
                 text.textContent = "Microphone";
             }
         }
@@ -1227,7 +1681,7 @@
             formData.append("file", blob, "enregistrement_live.webm");
 
             const uploadZone = document.getElementById("dropZone");
-            uploadZone.innerHTML = `<div class="upload-icon">⏳</div><div class="upload-text">Transcription du direct en cours...</div>`;
+            setUploadState("mx-loader", "Transcription de l’enregistrement…", "Garde cette page ouverte pendant le traitement.");
 
             try {
                 const resp = await fetch("/api/audio/upload", {
@@ -1235,17 +1689,39 @@
                     body: formData,
                 });
                 const data = await resp.json();
+                if (resp.status === 428 && data.error?.code === "policy_consent_required") {
+                    promptPolicyConsent(data.error.message);
+                    return;
+                }
+                if (resp.status === 402 && data.error?.code === "quota_exceeded") {
+                    window.location.assign(data.error.pricing_url || "/pricing?reason=quota");
+                    return;
+                }
+                if (!resp.ok) throw new Error(data.error?.message || "Erreur d’envoi de l’enregistrement.");
+                refreshBillingBadge();
                 pollAnalysis(data.analysis_id);
             } catch (err) {
-                alert("Erreur d'envoi de l'enregistrement : " + err.message);
+                setUploadState("mx-alert", "Envoi impossible", err.message || "Vérifie l’enregistrement puis réessaie.");
             }
         }
 
         // Initial setup on load
         window.addEventListener("DOMContentLoaded", () => {
+            syncPolicyControls();
+            ["consentPrivacy", "consentCopyright", "consentPlagiarism"].forEach(id => {
+                document.getElementById(id)?.addEventListener("change", updatePolicyAcceptButton);
+            });
+            updatePolicyAcceptButton();
+
             // Setup Drag & Drop on upload zone
             const dropZone = document.getElementById("dropZone");
             if (dropZone) {
+                dropZone.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openAudioPicker();
+                    }
+                });
                 ["dragenter", "dragover"].forEach(eventName => {
                     dropZone.addEventListener(eventName, (e) => {
                         e.preventDefault();
@@ -1272,9 +1748,18 @@
 
             const defaultAid = "{{ default_analysis_id }}";
             if (defaultAid) {
-                loadAnalysis(defaultAid);
+                fetch(`/api/analysis/${defaultAid}`)
+                    .then((response) => response.ok ? response.json() : null)
+                    .then((analysis) => {
+                        if (!analysis) return;
+                        if (analysis.status === "completed") loadAnalysis(defaultAid);
+                        else if (analysis.status === "queued" || analysis.status === "processing") pollAnalysis(defaultAid);
+                        else setUploadState("mx-alert", "Transcription interrompue", analysis.error_message || "Ouvre la bibliothèque pour gérer cette demande.");
+                    })
+                    .catch(() => setUploadState("mx-loader", "Chargement de la transcription…", "Réessaie d’actualiser la page dans un instant."));
             }
         });
     </script>
+    <script src="/static/js/score_editor.js"></script>
 </body>
 </html>

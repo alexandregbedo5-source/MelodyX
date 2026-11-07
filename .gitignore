@@ -3,6 +3,8 @@ __pycache__/
 *.pyo
 .env
 *.db
+*.db-wal
+*.db-shm
 uploads/
 *.wav
 *.mp3

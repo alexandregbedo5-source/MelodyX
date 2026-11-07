@@ -1,0 +1,40 @@
+{% extends "site_base.html" %}
+{% block title %}Tarifs simples en FCFA — MELODYX{% endblock %}
+{% block content %}
+<section class="page-shell pricing-page">
+    <div class="pricing-heading">
+        <div class="eyebrow">Des prix simples, en FCFA</div>
+        <h1>Commence gratuitement.<br><em>Continue à ton rythme.</em></h1>
+        <p>Les 10 premières transcriptions sont offertes. Choisis une formule seulement quand tu en as besoin.</p>
+    </div>
+    {% if reason == 'quota' %}
+    <div class="quota-notice" role="status"><span class="notice-symbol">10</span><div><strong>Tes 10 transcriptions offertes ont été utilisées.</strong><p>Choisis une formule pour continuer à créer et modifier tes partitions.</p></div></div>
+    {% endif %}
+    {% if payment_success %}
+    <div class="payment-success" role="status"><span aria-hidden="true"><svg class="icon"><use href="#mx-check"></use></svg></span><div><strong>Ton forfait est activé.</strong><p>La simulation est terminée; aucun paiement réel n’a été effectué.</p></div></div>
+    {% endif %}
+    <div class="pricing-grid">
+        {% for plan in plans %}
+        <article class="pricing-card {{ 'is-featured' if plan.get('featured') else '' }} {{ 'is-current' if billing.plan_id == plan.id else '' }}">
+            {% if plan.get('featured') %}<div class="plan-ribbon">LE PLUS CHOISI</div>{% endif %}
+            <div class="plan-topline"><span>{{ plan.name }}</span>{% if billing.plan_id == plan.id %}<span class="current-plan">ACTIF</span>{% endif %}</div>
+            <p class="plan-description">{{ plan.description }}</p>
+            <div class="plan-price"><strong>{{ '{:,}'.format(plan.price_fcfa).replace(',', ' ') }}</strong><span>FCFA</span></div>
+            <div class="plan-period">{{ plan.period }}</div>
+            <ul class="plan-features">
+                {% for feature in plan.features %}<li><span aria-hidden="true"><svg class="icon"><use href="#mx-check"></use></svg></span>{{ feature }}</li>{% endfor %}
+            </ul>
+            {% if billing.plan_id == plan.id %}
+                <span class="button button-current" aria-current="true">Formule actuelle</span>
+            {% elif plan.free %}
+                <a class="button button-outline" href="{{ url_for('web.studio') }}">Démarrer gratuitement</a>
+            {% else %}
+                <a class="button {{ 'button-primary' if plan.get('featured') else 'button-outline' }}" href="{{ url_for('web.checkout', plan_id=plan.id) }}">Choisir {{ plan.name }} <svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg></a>
+            {% endif %}
+            {% if not plan.free %}<small class="plan-renewal">Simulation de 30 jours · sans renouvellement automatique</small>{% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    <div class="payment-footnote"><span class="footnote-lock" aria-hidden="true"><svg class="icon"><use href="#mx-lock"></use></svg></span><span><strong>Paiement de démonstration.</strong> Aucune transaction réelle n’est effectuée et aucune coordonnée bancaire ou mobile n’est enregistrée.</span></div>
+</section>
+{% endblock %}

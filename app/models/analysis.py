@@ -83,8 +83,54 @@ CREATE TABLE IF NOT EXISTS ai_interactions (
     FOREIGN KEY (analysis_id) REFERENCES analyses(id)
 );
 
+CREATE TABLE IF NOT EXISTS score_edits (
+    analysis_id TEXT NOT NULL,
+    instrument TEXT NOT NULL,
+    musicxml TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (analysis_id, instrument),
+    FOREIGN KEY (analysis_id) REFERENCES analyses(id)
+);
+
+CREATE TABLE IF NOT EXISTS transcription_usage (
+    session_id TEXT PRIMARY KEY,
+    transcriptions_used INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS billing_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    plan_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    amount_fcfa INTEGER NOT NULL,
+    provider TEXT NOT NULL,
+    reference TEXT NOT NULL UNIQUE,
+    started_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS policy_consents (
+    session_id TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+    privacy_accepted INTEGER NOT NULL DEFAULT 0,
+    copyright_accepted INTEGER NOT NULL DEFAULT 0,
+    plagiarism_accepted INTEGER NOT NULL DEFAULT 0,
+    gemini_opt_in INTEGER NOT NULL DEFAULT 0,
+    accepted_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, policy_version),
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_analyses_session ON analyses(session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_cache ON ai_interactions(cache_key);
+CREATE INDEX IF NOT EXISTS idx_billing_session ON billing_subscriptions(session_id, status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_policy_consents_expiry ON policy_consents(expires_at);
 """
 
 
@@ -103,6 +149,11 @@ def init_db(app: Flask) -> None:
     conn = sqlite3.connect(db_path)
     try:
         conn.executescript(_SCHEMA_SQL)
+        conn.execute(
+            """INSERT OR IGNORE INTO transcription_usage (session_id, transcriptions_used)
+               SELECT session_id, COUNT(*) FROM analyses GROUP BY session_id"""
+        )
+        conn.commit()
     finally:
         conn.close()
 
@@ -162,7 +213,11 @@ def create_analysis(
     stored_path: str,
     sha256: str,
     expires_at: str,
-) -> str:
+    *,
+    analysis_id: Optional[str] = None,
+    enforce_quota: bool = False,
+    free_limit: int = 10,
+) -> Optional[str]:
     """Create a new analysis row and return its id.
 
     Parameters
@@ -177,22 +232,70 @@ def create_analysis(
         SHA-256 hex digest of the uploaded file.
     expires_at:
         ISO-8601 UTC datetime string after which the analysis may be purged.
+    analysis_id:
+        Optional pre-generated id, used to keep the analysis folder and row aligned.
+    enforce_quota:
+        If true, reject the analysis when the free transcription allowance is used.
+    free_limit:
+        Number of accepted transcriptions before a paid plan is required.
 
     Returns
     -------
-    str
-        The generated analysis id (``an_<12-hex-chars>``).
+    Optional[str]
+        The id, or ``None`` when the free transcription allowance is exhausted.
     """
-    analysis_id = _new_analysis_id()
+    analysis_id = analysis_id or _new_analysis_id()
+    db = get_db()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        db.execute(
+            "INSERT OR IGNORE INTO transcription_usage (session_id) VALUES (?)",
+            (session_id,),
+        )
+        usage = db.execute(
+            "SELECT transcriptions_used FROM transcription_usage WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        active_plan = db.execute(
+            """SELECT 1 FROM billing_subscriptions
+               WHERE session_id = ? AND status = 'active' AND plan_id != 'decouverte'
+                 AND expires_at > ? LIMIT 1""",
+            (session_id, now),
+        ).fetchone()
+        if enforce_quota and int(usage["transcriptions_used"]) >= free_limit and not active_plan:
+            db.rollback()
+            return None
+
+        db.execute(
+            """INSERT INTO analyses
+               (id, session_id, original_filename, stored_path, file_sha256, expires_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (analysis_id, session_id, filename, stored_path, sha256, expires_at),
+        )
+        db.execute(
+            """UPDATE transcription_usage
+               SET transcriptions_used = transcriptions_used + 1, updated_at = datetime('now')
+               WHERE session_id = ?""",
+            (session_id,),
+        )
+        db.commit()
+        return analysis_id
+    except Exception:
+        db.rollback()
+        raise
+
+
+def refund_transcription(session_id: str) -> None:
+    """Refund one accepted transcription after a processing failure."""
     db = get_db()
     db.execute(
-        """INSERT INTO analyses
-           (id, session_id, original_filename, stored_path, file_sha256, expires_at)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (analysis_id, session_id, filename, stored_path, sha256, expires_at),
+        """UPDATE transcription_usage
+           SET transcriptions_used = MAX(0, transcriptions_used - 1), updated_at = datetime('now')
+           WHERE session_id = ?""",
+        (session_id,),
     )
     db.commit()
-    return analysis_id
 
 
 def get_analysis(analysis_id: str, session_id: str) -> Optional[dict[str, Any]]:
@@ -319,6 +422,73 @@ def save_artifact(
     db.commit()
 
 
+def get_score_edit(analysis_id: str, instrument: str) -> Optional[dict[str, Any]]:
+    """Return the user's saved final MusicXML for one instrument score."""
+    db = get_db()
+    row = db.execute(
+        """SELECT analysis_id, instrument, musicxml, version, updated_at
+           FROM score_edits WHERE analysis_id = ? AND instrument = ?""",
+        (analysis_id, instrument),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def save_score_edit(
+    analysis_id: str,
+    instrument: str,
+    musicxml: str,
+    expected_version: int,
+) -> tuple[bool, int, Optional[str]]:
+    """Save an edited final score with optimistic concurrency control.
+
+    ``expected_version`` is zero for a score that has never been edited.
+    Returns ``(saved, current_or_new_version, updated_at)``.
+    """
+    db = get_db()
+    updated_at = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z")
+    )
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        row = db.execute(
+            "SELECT version FROM score_edits WHERE analysis_id = ? AND instrument = ?",
+            (analysis_id, instrument),
+        ).fetchone()
+        current_version = int(row["version"]) if row else 0
+        if current_version != expected_version:
+            db.rollback()
+            return False, current_version, None
+
+        new_version = current_version + 1
+        if row:
+            db.execute(
+                """UPDATE score_edits SET musicxml = ?, version = ?, updated_at = ?
+                   WHERE analysis_id = ? AND instrument = ?""",
+                (musicxml, new_version, updated_at, analysis_id, instrument),
+            )
+        else:
+            db.execute(
+                """INSERT INTO score_edits
+                   (analysis_id, instrument, musicxml, version, updated_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (analysis_id, instrument, musicxml, new_version, updated_at),
+            )
+        db.commit()
+        return True, new_version, updated_at
+    except Exception:
+        db.rollback()
+        raise
+
+
+def delete_score_edits(analysis_id: str) -> None:
+    """Remove saved final-score edits for an analysis."""
+    db = get_db()
+    db.execute("DELETE FROM score_edits WHERE analysis_id = ?", (analysis_id,))
+    db.commit()
+
+
 def get_artifacts(analysis_id: str, session_id: str) -> list[dict[str, Any]]:
     """Return all artifacts for an analysis if the session owns it."""
     db = get_db()
@@ -370,6 +540,7 @@ def delete_analysis(analysis_id: str, session_id: str) -> bool:
             os.remove(art["file_path"])
 
     # Cascade delete related rows
+    db.execute("DELETE FROM score_edits WHERE analysis_id = ?", (analysis_id,))
     db.execute("DELETE FROM artifacts WHERE analysis_id = ?", (analysis_id,))
     db.execute("DELETE FROM analysis_results WHERE analysis_id = ?", (analysis_id,))
     db.execute("DELETE FROM ai_interactions WHERE analysis_id = ?", (analysis_id,))
@@ -412,6 +583,7 @@ def purge_expired_analyses() -> int:
                 if art["file_path"] and os.path.isfile(art["file_path"]):
                     os.remove(art["file_path"])
             conn.execute("DELETE FROM artifacts WHERE analysis_id = ?", (aid,))
+            conn.execute("DELETE FROM score_edits WHERE analysis_id = ?", (aid,))
             conn.execute("DELETE FROM analysis_results WHERE analysis_id = ?", (aid,))
             conn.execute("DELETE FROM ai_interactions WHERE analysis_id = ?", (aid,))
             conn.execute("DELETE FROM analyses WHERE id = ?", (aid,))

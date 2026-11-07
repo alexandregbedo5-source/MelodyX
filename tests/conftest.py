@@ -8,15 +8,15 @@ from app import create_app
 @pytest.fixture
 def app():
     """Create application for testing."""
-    # Create a temp directory for uploads
+    # Keep test data out of the project's configured database and uploads.
     with tempfile.TemporaryDirectory() as tmpdir:
-        os.environ['UPLOAD_FOLDER'] = os.path.join(tmpdir, 'uploads')
-        os.environ['DATABASE_URL'] = f'sqlite:///{os.path.join(tmpdir, "test.db")}'
-        os.environ['SECRET_KEY'] = 'test-secret-key'
-        os.environ['GEMINI_API_KEY'] = ''  # Disabled for tests
-        
-        app = create_app()
-        app.config['TESTING'] = True
+        app = create_app({
+            'UPLOAD_FOLDER': os.path.join(tmpdir, 'uploads'),
+            'DATABASE_PATH': os.path.join(tmpdir, 'test.db'),
+            'SECRET_KEY': 'test-secret-key',
+            'GEMINI_API_KEY': '',  # Disabled for tests
+            'TESTING': True,
+        })
         
         yield app
 

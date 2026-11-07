@@ -142,12 +142,15 @@ def _call_gemini(prompt: str, system_instruction: str, config: dict) -> str:
         raise ValueError("GEMINI_API_KEY is not configured.")
     
     model_name = config.get("GEMINI_MODEL", "gemini-2.0-flash")
-    timeout = config.get("GEMINI_TIMEOUT", 25)
-    max_retries = config.get("GEMINI_MAX_RETRIES", 2)
+    timeout = max(1, float(config.get("GEMINI_TIMEOUT", 10)))
+    max_retries = max(0, int(config.get("GEMINI_MAX_RETRIES", 0)))
     
     try:
         from google import genai
-        client = genai.Client(api_key=api_key)
+        client = genai.Client(
+            api_key=api_key,
+            http_options=genai.types.HttpOptions(timeout=int(timeout * 1000)),
+        )
     except ImportError:
         raise ImportError("google-genai package is required. Install with: pip install google-genai")
     
@@ -168,7 +171,7 @@ def _call_gemini(prompt: str, system_instruction: str, config: dict) -> str:
             last_error = e
             logger.warning("Gemini API call attempt %d failed: %s", attempt + 1, e)
             if attempt < max_retries:
-                wait = 2 ** attempt  # Exponential backoff: 1s, 2s
+                wait = min(2 ** attempt, 4)  # Short bounded backoff for optional AI.
                 time.sleep(wait)
     
     raise RuntimeError(f"Gemini API call failed after {max_retries + 1} attempts: {last_error}")

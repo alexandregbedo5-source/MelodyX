@@ -33,9 +33,13 @@ The API will be available at **http://localhost:5000**.
 | `GET`    | `/api/analysis/{id}`                           | Get analysis detail / status    |
 | `DELETE` | `/api/analysis/{id}`                           | Delete an analysis              |
 | `GET`    | `/api/analysis/{id}/audio`                     | Stream original audio           |
+| `GET`    | `/api/analysis/{id}/score?instrument={id}`      | Get the final MusicXML score    |
+| `PUT`    | `/api/analysis/{id}/score?instrument={id}`      | Save edits to that final score  |
 | `GET`    | `/api/analysis/{id}/export/{type}`             | Download artifact (midi/musicxml/pdf) |
 | `GET`    | `/api/analysis/{id}/artifacts`                 | List available artifacts        |
 | `POST`   | `/api/analysis/{id}/ask`                       | Ask AI tutor a question         |
+
+Final-score edits are stored independently for each analysis and instrument (`conductor`, `piano`, `lead`, or `bass`). They do not rewrite the source analysis; MusicXML, MIDI, and PDF exports use the saved score edits when present.
 
 ## Tech Stack
 

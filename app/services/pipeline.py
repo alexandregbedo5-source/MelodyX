@@ -47,6 +47,7 @@ def run_pipeline(app: Flask, analysis_id: str) -> None:
             save_result,
             save_artifact,
             get_analysis,
+            refund_transcription,
         )
         from app.extensions import get_db
 
@@ -273,6 +274,10 @@ def run_pipeline(app: Flask, analysis_id: str) -> None:
                 error_message=str(exc)[:500],
                 completed_at=_utcnow_iso(),
             )
+            try:
+                refund_transcription(row["session_id"])
+            except Exception:
+                logger.exception("[%s] Could not restore quota after pipeline failure.", analysis_id)
             return
 
         # ===== STAGE 6: AI INTERPRETATION (B6) — non-critical ===========
@@ -282,21 +287,30 @@ def run_pipeline(app: Flask, analysis_id: str) -> None:
             )
             logger.info("[%s] Stage: ai_interpretation", analysis_id)
 
-            from app.services.gemini_service import get_ai_summary
+            from app.models.policies import has_gemini_opt_in
 
-            # Build a temporary result dict for AI context
-            temp_result = {
-                "music": {
-                    "tempo_bpm": rhythm_data.get("tempo_bpm", {}),
-                    "key": harmony_data.get("key", {}),
-                    "time_signature": rhythm_data.get("time_signature", {}),
-                    "chords": harmony_data.get("chords", []),
-                    "beats": rhythm_data.get("beats", []),
-                    "measures": measures,
-                    "notes": quantized_notes,
-                },
-            }
-            ai_result = get_ai_summary(temp_result, dict(config))
+            if has_gemini_opt_in(row["session_id"]):
+                from app.services.gemini_service import get_ai_summary
+
+                # Only derived musical information is sent; the source audio stays local.
+                temp_result = {
+                    "music": {
+                        "tempo_bpm": rhythm_data.get("tempo_bpm", {}),
+                        "key": harmony_data.get("key", {}),
+                        "time_signature": rhythm_data.get("time_signature", {}),
+                        "chords": harmony_data.get("chords", []),
+                        "beats": rhythm_data.get("beats", []),
+                        "measures": measures,
+                        "notes": quantized_notes,
+                    },
+                }
+                ai_result = get_ai_summary(temp_result, dict(config))
+            else:
+                ai_result = {
+                    "available": False,
+                    "consent_required": True,
+                    "message": "Résumé Gemini désactivé : les données musicales n’ont pas été partagées.",
+                }
 
         except Exception as exc:
             logger.warning(

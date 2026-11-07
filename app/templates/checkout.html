@@ -1,0 +1,61 @@
+{% extends "site_base.html" %}
+{% block title %}Paiement simulé — MELODYX{% endblock %}
+{% block content %}
+<section class="page-shell checkout-page">
+    <a class="back-link" href="{{ url_for('web.pricing') }}"><svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg>Retour aux tarifs</a>
+    <div class="checkout-layout">
+        <div class="checkout-copy">
+            <div class="eyebrow">Étape de confirmation</div>
+            <h1>Active la formule<br><em>{{ plan.name }}.</em></h1>
+            <p>Valide la simulation pour ouvrir les transcriptions sans quota pendant 30 jours.</p>
+            <div class="demo-payment-note"><span aria-hidden="true"><svg class="icon"><use href="#mx-info"></use></svg></span><span><strong>Mode démonstration.</strong> Il n’y aura aucun débit réel. Cette page ne collecte ni numéro de téléphone ni donnée bancaire.</span></div>
+        </div>
+        <form class="checkout-card" id="checkoutForm" data-plan-id="{{ plan.id }}">
+            <div class="checkout-card-head"><span>RÉCAPITULATIF</span><span class="secure-mark"><svg class="icon" aria-hidden="true"><use href="#mx-lock"></use></svg> TEST LOCAL</span></div>
+            <div class="checkout-plan"><div><strong>{{ plan.name }}</strong><small>Accès pendant 30 jours</small></div><span>{{ '{:,}'.format(plan.price_fcfa).replace(',', ' ') }} FCFA</span></div>
+            <label class="provider-label" for="paymentProvider">Choisis un moyen de paiement de démonstration</label>
+            <select id="paymentProvider" name="provider" required>
+                <option value="orange_money">Orange Money</option>
+                <option value="mtn_momo">MTN MoMo</option>
+                <option value="moov_money">Moov Money</option>
+                <option value="wave">Wave</option>
+                <option value="carte_test">Carte de démonstration</option>
+            </select>
+            <p class="provider-help">Le choix du moyen sert uniquement à tester le parcours. Aucun opérateur n’est contacté.</p>
+            <div class="checkout-total"><span>Total simulé</span><strong>{{ '{:,}'.format(plan.price_fcfa).replace(',', ' ') }} <small>FCFA</small></strong></div>
+            <button class="button button-primary checkout-submit" type="submit" id="checkoutSubmit">Confirmer le paiement démo <svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg></button>
+            <div class="checkout-result" id="checkoutResult" role="status" aria-live="polite"></div>
+            <small class="checkout-legal">En continuant, tu actives une formule de démonstration pour ce navigateur.</small>
+        </form>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('checkoutForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = document.getElementById('checkoutSubmit');
+    const result = document.getElementById('checkoutResult');
+    button.disabled = true;
+    result.textContent = 'Activation de la simulation…';
+    try {
+        const response = await fetch('/api/billing/simulate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                plan_id: form.dataset.planId,
+                provider: document.getElementById('paymentProvider').value
+            })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || 'La simulation n’a pas pu être confirmée.');
+        result.textContent = `${data.message} Référence : ${data.subscription.reference}`;
+        window.location.assign('/pricing?payment=success');
+    } catch (error) {
+        result.textContent = error.message;
+        button.disabled = false;
+    }
+});
+</script>
+{% endblock %}

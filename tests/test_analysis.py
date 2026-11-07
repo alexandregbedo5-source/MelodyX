@@ -262,6 +262,15 @@ def test_teacher_cache_returns_cached_response(client, app):
     session_id = "test_sess_teacher_cache"
     client.set_cookie("melodyx_sid", session_id)
     aid = _seed_completed_analysis(app, session_id)
+    from app.models.policies import POLICY_VERSION
+    consent = client.post("/api/policies/consent", json={
+        "policy_version": POLICY_VERSION,
+        "privacy_accepted": True,
+        "copyright_accepted": True,
+        "plagiarism_accepted": True,
+        "gemini_opt_in": True,
+    })
+    assert consent.status_code == 200
 
     selection = {"measure_start": 1, "measure_end": 1}
     question = "Why is this C major?"

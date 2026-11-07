@@ -1,0 +1,43 @@
+{% extends "site_base.html" %}
+{% block title %}Ma bibliothèque — MELODYX{% endblock %}
+{% block content %}
+<section class="page-shell library-page">
+    <div class="page-intro">
+        <div><div class="eyebrow">Ton espace de travail</div><h1>Ma <em>bibliothèque.</em></h1><p>Retrouve tes morceaux, leurs transcriptions et les partitions enregistrées.</p></div>
+        <a class="button button-primary" href="{{ url_for('web.studio') }}"><svg class="icon" aria-hidden="true"><use href="#mx-plus"></use></svg>Nouvelle transcription</a>
+    </div>
+    {% if analyses %}
+    <div class="library-list" aria-label="Transcriptions récentes">
+        {% for analysis in analyses %}
+        <article class="library-row">
+            <div class="library-file-icon" aria-hidden="true"><svg class="icon"><use href="#mx-music-note"></use></svg></div>
+            <div class="library-main">
+                <h2>{{ analysis.original_filename or 'Morceau audio' }}</h2>
+                <p>{{ analysis.created_at }}{% if analysis.duration_seconds %} · {{ '%.1f'|format(analysis.duration_seconds) }} s{% endif %}</p>
+            </div>
+            <div class="analysis-status status-{{ analysis.status }}">
+                <span class="status-led"></span>
+                {% if analysis.status == 'completed' %}Partition prête
+                {% elif analysis.status == 'processing' %}{{ {'decoding': 'Lecture audio', 'features': 'Analyse musicale', 'transcription': 'Repérage des notes', 'quantization': 'Mise en mesures', 'notation': 'Gravure de la partition', 'ai_interpretation': 'Finalisation'} .get(analysis.stage, 'En cours') }} · {{ (analysis.progress * 100)|round|int }}%
+                {% elif analysis.status == 'queued' %}Dans la file d’attente
+                {% else %}À reprendre{% endif %}
+            </div>
+            {% if analysis.status == 'completed' %}
+                <a class="row-action" href="{{ url_for('web.studio', analysis_id=analysis.id) }}" aria-label="Ouvrir {{ analysis.original_filename or 'la partition' }}">Ouvrir <svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg></a>
+            {% else %}
+                <a class="row-action" href="{{ url_for('web.studio', analysis_id=analysis.id) }}">Voir l’avancement <svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg></a>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-library">
+        <div class="empty-orbit" aria-hidden="true"><svg class="icon"><use href="#mx-music-note"></use></svg></div>
+        <div class="eyebrow">Le premier morceau t’attend</div>
+        <h2>Ta bibliothèque est encore vide.</h2>
+        <p>Importe un fichier audio pour faire apparaître ici tes transcriptions et partitions finales.</p>
+        <a class="button button-primary" href="{{ url_for('web.studio') }}">Commencer avec le studio <svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg></a>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

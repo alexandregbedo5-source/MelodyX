@@ -1,0 +1,66 @@
+{% extends "site_base.html" %}
+{% block title %}MELODYX — Le son devient partition{% endblock %}
+{% block content %}
+<section class="home-hero">
+    <div class="hero-copy">
+        <div class="eyebrow"><span class="eyebrow-dot"></span> L’atelier musical assisté</div>
+        <h1>Le son devient<br><em>partition.</em></h1>
+        <p class="hero-lede">Dépose un morceau, retrouve ses notes, puis façonne chaque pupitre jusqu’au résultat qui te ressemble.</p>
+        <div class="hero-actions">
+            <a class="button button-primary" href="{{ url_for('web.studio') }}">Commencer une transcription <svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg></a>
+            <a class="button button-quiet" href="{{ url_for('web.pricing') }}">Découvrir les offres <svg class="icon" aria-hidden="true"><use href="#mx-arrow-up-right"></use></svg></a>
+        </div>
+        <div class="hero-trust">
+            <span class="trust-icon" aria-hidden="true"><svg class="icon"><use href="#mx-music-note"></use></svg></span>
+            <span><strong>10 transcriptions offertes</strong><br>puis des offres dès 1&nbsp;500 FCFA</span>
+        </div>
+    </div>
+
+    <div class="hero-visual" aria-label="Aperçu d’une partition créée par MELODYX">
+        <div class="visual-orbit orbit-one"></div><div class="visual-orbit orbit-two"></div>
+        <div class="score-card">
+            <div class="score-card-top"><span class="live-mark"><i></i> ÉCOUTE → ÉCRITURE</span><span class="score-menu">•••</span></div>
+            <div class="score-title">Une idée musicale</div>
+            <div class="score-meta">DÉMO · 4 MESURES · 96 BPM</div>
+            <svg class="score-preview" viewBox="0 0 500 205" role="img" aria-label="Portée musicale avec notes et ligne de rythme">
+                <g class="staff-lines"><path d="M20 43H480M20 64H480M20 85H480M20 106H480M20 127H480"/><path d="M20 43V127M480 43V127"/></g>
+                <text class="clef" x="33" y="111">𝄞</text>
+                <g class="notes"><ellipse cx="128" cy="105" rx="9" ry="6"/><ellipse cx="185" cy="84" rx="9" ry="6"/><ellipse cx="242" cy="74" rx="9" ry="6"/><ellipse cx="299" cy="95" rx="9" ry="6"/><ellipse cx="356" cy="63" rx="9" ry="6"/><ellipse cx="413" cy="84" rx="9" ry="6"/></g>
+                <g class="stems"><path d="M137 105V49M194 84V28M251 74V18M308 95V39M365 63V18M422 84V28"/></g>
+                <g class="waveform"><path d="M30 177h18l8-11 9 22 10-32 9 36 10-22 8 7h18l8-15 9 29 10-38 9 31 9-7h22l8-13 9 26 9-35 10 26 10-4h18l8-10 9 23 10-32 9 26 9-7h19l8-17 9 33 10-39 9 30 9-7h21l8-13 10 28 9-34 9 24 10-5h18l8-10 10 21 9-30 10 24 9-5h19"/></g>
+            </svg>
+            <div class="score-card-bottom"><span><b class="tiny-blue"></b> Notes reconnues</span><span>Partition prête à éditer <svg class="icon" aria-hidden="true"><use href="#mx-edit"></use></svg></span></div>
+        </div>
+        <div class="floating-chip chip-tempo"><span class="chip-icon"><svg class="icon" aria-hidden="true"><use href="#mx-music-note"></use></svg></span><span><small>TEMPO DÉTECTÉ</small><strong>96 <i>BPM</i></strong></span></div>
+        <div class="floating-chip chip-key"><span class="key-symbol">C</span><span><small>TONALITÉ</small><strong>Do majeur</strong></span></div>
+        <div class="hero-stamp"><span>De l’audio<br>au pupitre</span><svg class="icon" aria-hidden="true"><use href="#mx-sparkles"></use></svg></div>
+    </div>
+</section>
+
+<section class="proof-strip" aria-label="Fonctionnalités MELODYX">
+    <div><strong>4</strong><span>pupitres à explorer</span></div>
+    <span class="proof-divider" aria-hidden="true"></span>
+    <div><strong>10</strong><span>transcriptions offertes</span></div>
+    <span class="proof-divider" aria-hidden="true"></span>
+    <div><strong>3</strong><span>formats d’export</span></div>
+    <span class="proof-note">Pensé pour les musiciens qui veulent aller plus loin que l’écoute.</span>
+</section>
+
+<section class="section-workflow">
+    <div class="section-heading">
+        <div><div class="eyebrow">Un atelier, trois gestes</div><h2>De ton morceau<br><em>à ta partition.</em></h2></div>
+        <p>MELODYX transforme l’écoute en matière de travail : claire, éditable et prête à partager.</p>
+    </div>
+    <div class="workflow-grid">
+        <article class="workflow-card"><div class="step-number">01 <span>·</span></div><div class="step-icon icon-upload"><svg class="icon" aria-hidden="true"><use href="#mx-upload"></use></svg></div><h3>Importe ton audio</h3><p>Dépose un fichier ou enregistre un extrait depuis ton microphone.</p><span class="step-underline"></span></article>
+        <article class="workflow-card"><div class="step-number">02 <span>·</span></div><div class="step-icon icon-listen"><svg class="icon" aria-hidden="true"><use href="#mx-music-note"></use></svg></div><h3>Laisse MELODYX écouter</h3><p>Rythme, tonalité, accords et notes sont repérés puis mis en mesure.</p><span class="step-underline"></span></article>
+        <article class="workflow-card"><div class="step-number">03 <span>·</span></div><div class="step-icon icon-edit"><svg class="icon" aria-hidden="true"><use href="#mx-edit"></use></svg></div><h3>Travaille le résultat</h3><p>Affiche chaque pupitre, corrige les notes et exporte ta version finale.</p><span class="step-underline"></span></article>
+    </div>
+</section>
+
+<section class="home-cta-band">
+    <div class="cta-note" aria-hidden="true">𝄞</div>
+    <div><div class="eyebrow light-eyebrow">À toi de jouer</div><h2>Ta prochaine partition<br>commence ici.</h2></div>
+    <a class="button button-white" href="{{ url_for('web.studio') }}">Ouvrir le studio <svg class="icon" aria-hidden="true"><use href="#mx-arrow-right"></use></svg></a>
+</section>
+{% endblock %}
